@@ -21,43 +21,30 @@
 #include <cuda.h>
 #include <dlfcn.h>
 
-#if defined (commentout)
-typedef struct plan_entry_struct plan_entry;
-struct plan_entry_struct
-{
-    int knob_id;
-
-    void* gpu_pointer;
-    void* cpu_pointer;
-
-    size_t size;
-
-    plan_entry* next;
-};
-#endif
-
-
-// -- Tuning algorithm stuff ---------------------
-enum cuzmem_tuner {
-    CUZMEM_EXHAUSTIVE
-};
-
+// -- Tuning Engine stuff ------------------------
 enum cuzmem_tuner_action {
     CUZMEM_TUNER_START,
     CUZMEM_TUNER_LOOKUP,
     CUZMEM_TUNER_END
 };
 
+enum cuzmem_tuner {
+    CUZMEM_EXHAUSTIVE
+};
+
 int cuzmem_tuner_exhaustive (enum cuzmem_tuner_action action);
 // -----------------------------------------------
 
 
-// libcuzmem operation modes
+// -- libcuzmem operation modes ------------------
 enum cuzmem_op_mode {
     CUZMEM_RUN,
     CUZMEM_TUNE
 };
+// -----------------------------------------------
 
+
+// -- Export symbols -----------------------------
 #if defined __cplusplus
 extern "C" {
 #endif
@@ -72,8 +59,10 @@ extern "C" {
 #if defined __cplusplus
 };
 #endif
+// -----------------------------------------------
 
 
+// -- Some fairly nasty Framework Macros ---------
 #define CUZMEM_LOAD_SYMBOL(sym, lib)                                   \
     *(void **)(&sym) = dlsym (lib, #sym);                               
 
@@ -109,6 +98,24 @@ extern "C" {
     if (CUZMEM_TUNE == cuzmem_end()) {         \
         goto cuzmem_start_label;               \
     }                                           
+// -----------------------------------------------
     
+
+
+#if defined (commentout)
+typedef struct plan_entry_struct plan_entry;
+struct plan_entry_struct
+{
+    int knob_id;
+
+    void* gpu_pointer;
+    void* cpu_pointer;
+
+    size_t size;
+
+    plan_entry* next;
+};
+#endif
+
 
 #endif // #ifndef __cuzmem_h__
