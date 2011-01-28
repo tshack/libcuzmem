@@ -28,7 +28,7 @@ char project_name[FILENAME_MAX];
 int (*search)() = cuzmem_search_exhaustive;
 unsigned int current_knob = 0;
 unsigned int num_knobs = 0;
-enum cuzmem_mode mode = CUZMEM_RUN;
+enum cuzmem_op_mode op_mode = CUZMEM_RUN;
 
 
 cudaError_t
@@ -91,9 +91,9 @@ cuzmem_search_exhaustive ()
 
 
 void
-cuzmem_search (enum cuzmem_search_mode mode)
+cuzmem_search (enum cuzmem_search_mode search_mode)
 {
-    switch (mode)
+    switch (search_mode)
     {
     case CUZMEM_EXHAUSTIVE:
     case CUZMEM_MAGIC:
@@ -104,20 +104,41 @@ cuzmem_search (enum cuzmem_search_mode mode)
 
 
 void
-cuzmem_start (enum cuzmem_mode m)
+cuzmem_start (enum cuzmem_op_mode m)
 {
-    mode = m;
+    op_mode = m;
     current_knob = 0;
-    printf ("Mode is: %i\n", mode);
+#if defined (DEBUG)
+    if (op_mode == CUZMEM_RUN) {
+        printf ("libcuzmem: mode is CUZMEM_RUN\n");
+    }
+    else if (op_mode == CUZMEM_TUNE) {
+        printf ("libcuzmem: mode is CUZMEM_TUNE\n");
+    }
+    else {
+        printf ("libcuzmem: mode is UNKNOWN?!\n");
+    }
+#endif
 }
 
 
-void
+cuzmem_op_mode
 cuzmem_end ()
 {
-    if (current_knob > num_knobs) {
-        num_knobs = current_knob;
+    if (CUZMEM_RUN == op_mode) {
+        // Do run mode stuff here
     }
+    else if (CUZMEM_TUNE == op_mode) {
+        // Record # of malloc encounters
+        if (current_knob > num_knobs) {
+            num_knobs = current_knob;
+        }
+    }
+    else {
+        // This should never happen
+    }
+
+    return op_mode;
 }
 
 
