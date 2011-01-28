@@ -37,13 +37,20 @@ struct plan_entry_struct
 #endif
 
 
-// Search algorithms... currently only the one.
-int cuzmem_search_exhaustive ();
-
-enum cuzmem_search_mode {
-    CUZMEM_EXHAUSTIVE,
-    CUZMEM_MAGIC
+// -- Tuning algorithm stuff ---------------------
+enum cuzmem_tuner {
+    CUZMEM_EXHAUSTIVE
 };
+
+enum cuzmem_tuner_action {
+    CUZMEM_TUNER_START,
+    CUZMEM_TUNER_LOOKUP,
+    CUZMEM_TUNER_END
+};
+
+int cuzmem_tuner_exhaustive (enum cuzmem_tuner_action action);
+// -----------------------------------------------
+
 
 // libcuzmem operation modes
 enum cuzmem_op_mode {
@@ -54,11 +61,13 @@ enum cuzmem_op_mode {
 #if defined __cplusplus
 extern "C" {
 #endif
+    // Framework symbols
     void cuzmem_start (enum cuzmem_op_mode m);
     enum cuzmem_op_mode cuzmem_end ();
-    void cuzmem_project (char* project);
-    void cuzmem_plan (char* plan);
-    void cuzmem_search (enum cuzmem_search_mode search_mode);
+    // User symbols
+    void cuzmem_set_project (char* project);
+    void cuzmem_set_plan (char* plan);
+    void cuzmem_set_tuner (enum cuzmem_tuner t);
 //    void cuzmem_plan (int count, ...);
 #if defined __cplusplus
 };
@@ -80,15 +89,17 @@ extern "C" {
 #define CUZMEM_BENCH_INIT                                              \
     void (*cuzmem_start)();                                            \
     enum cuzmem_op_mode (*cuzmem_end)();                               \
-    void (*cuzmem_project)(char*);                                     \
-    void (*cuzmem_plan)(char*);                                        \
+    void (*cuzmem_set_project)(char*);                                 \
+    void (*cuzmem_set_plan)(char*);                                    \
+    void (*cuzmem_set_tuner)(enum cuzmem_tuner);                       \
                                                                        \
     void* libcuzmem = dlopen ("./libcuzmem.so", RTLD_LAZY);            \
     if (!libcuzmem) { printf ("Error Loading libcuzmem\n"); exit(1); } \
     CUZMEM_LOAD_SYMBOL (cuzmem_start, libcuzmem);                      \
     CUZMEM_LOAD_SYMBOL (cuzmem_end, libcuzmem);                        \
-    CUZMEM_LOAD_SYMBOL (cuzmem_project, libcuzmem);                    \
-    CUZMEM_LOAD_SYMBOL (cuzmem_plan, libcuzmem);                        
+    CUZMEM_LOAD_SYMBOL (cuzmem_set_project, libcuzmem);                \
+    CUZMEM_LOAD_SYMBOL (cuzmem_set_plan, libcuzmem);                   \
+    CUZMEM_LOAD_SYMBOL (cuzmem_set_tuner, libcuzmem);                   
 
 
 #define CUZMEM_START(mode)   cuzmem_start_label: cuzmem_start(mode) ;
