@@ -45,8 +45,8 @@ enum cuzmem_search_mode {
     CUZMEM_MAGIC
 };
 
-// libcuzmem modes
-enum cuzmem_mode {
+// libcuzmem operation modes
+enum cuzmem_op_mode {
     CUZMEM_RUN,
     CUZMEM_TUNE
 };
@@ -54,11 +54,11 @@ enum cuzmem_mode {
 #if defined __cplusplus
 extern "C" {
 #endif
-    void cuzmem_start (enum cuzmem_mode m);
-    void cuzmem_end ();
+    void cuzmem_start (enum cuzmem_op_mode m);
+    enum cuzmem_op_mode cuzmem_end ();
     void cuzmem_project (char* project);
     void cuzmem_plan (char* plan);
-    void cuzmem_search (enum cuzmem_search_mode mode);
+    void cuzmem_search (enum cuzmem_search_mode search_mode);
 //    void cuzmem_plan (int count, ...);
 #if defined __cplusplus
 };
@@ -79,7 +79,7 @@ extern "C" {
 
 #define CUZMEM_BENCH_INIT                                              \
     void (*cuzmem_start)();                                            \
-    void (*cuzmem_end)();                                              \
+    enum cuzmem_op_mode (*cuzmem_end)();                               \
     void (*cuzmem_project)(char*);                                     \
     void (*cuzmem_plan)(char*);                                        \
                                                                        \
@@ -93,9 +93,11 @@ extern "C" {
 
 #define CUZMEM_START(mode)   cuzmem_start_label: cuzmem_start(mode) ;
 
+
 #define CUZMEM_END                             \
-    cuzmem_end ();                             \
-    goto cuzmem_start_label;                    
+    if (CUZMEM_TUNE == cuzmem_end()) {         \
+        goto cuzmem_start_label;               \
+    }                                           
     
 
 #endif // #ifndef __cuzmem_h__
