@@ -1,7 +1,7 @@
-/*  This file is part of libcuzptune
+/*  This file is part of libcuzmem
     Copyright (C) 2011  James A. Shackleford
 
-    libcuzptune is free software: you can redistribute it and/or modify
+    libcuzmem is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
@@ -25,9 +25,10 @@
 
 char plan_name[FILENAME_MAX];
 char project_name[FILENAME_MAX];
-int (*search)() = cuzptune_search_exhaustive;
+int (*search)() = cuzmem_search_exhaustive;
 unsigned int current_knob = 0;
 unsigned int num_knobs = 0;
+enum cuzmem_mode mode = CUZMEM_RUN;
 
 
 cudaError_t
@@ -78,9 +79,11 @@ cudaMalloc (void **devPtr, size_t size)
 
 
 int
-cuzptune_search_exhaustive ()
+cuzmem_search_exhaustive ()
 {
+#if defined (DEBUG)
     printf ("** Going with Global!\n");
+#endif
 
     // use gpu global memory
     return 1;
@@ -88,27 +91,29 @@ cuzptune_search_exhaustive ()
 
 
 void
-cuzptune_search (enum cuzptune_search_mode mode)
+cuzmem_search (enum cuzmem_search_mode mode)
 {
     switch (mode)
     {
-    case CUZPTUNE_EXHAUSTIVE:
-    case CUZPTUNE_MAGIC:
+    case CUZMEM_EXHAUSTIVE:
+    case CUZMEM_MAGIC:
     default:
-        search = cuzptune_search_exhaustive;
+        search = cuzmem_search_exhaustive;
     }
 }
 
 
 void
-cuzptune_start ()
+cuzmem_start (enum cuzmem_mode m)
 {
+    mode = m;
     current_knob = 0;
+    printf ("Mode is: %i\n", mode);
 }
 
 
 void
-cuzptune_end ()
+cuzmem_end ()
 {
     if (current_knob > num_knobs) {
         num_knobs = current_knob;
@@ -117,21 +122,21 @@ cuzptune_end ()
 
 
 void
-cuzptune_plan (char* plan)
+cuzmem_plan (char* plan)
 {
     strcpy (plan_name, plan);
 }
 
 
 void
-cuzptune_project (char* project)
+cuzmem_project (char* project)
 {
     strcpy (project_name, project);
 }
 
 #if defined (commentout)
 void
-cuzptune_plan (int count, ...)
+cuzmem_plan (int count, ...)
 {
     int i;
     va_list knobs;
