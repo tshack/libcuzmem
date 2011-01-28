@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <cuda.h>
 #include "libcuzmem.h"
 
@@ -25,11 +26,17 @@
 
 char plan_name[FILENAME_MAX];
 char project_name[FILENAME_MAX];
-int (*search)() = cuzmem_search_exhaustive;
+int (*call_tuner)(enum cuzmem_tuner_action) = cuzmem_tuner_exhaustive;
 unsigned int current_knob = 0;
 unsigned int num_knobs = 0;
+unsigned int tune_iter = 0;
+unsigned int tune_iter_max = 0;
 enum cuzmem_op_mode op_mode = CUZMEM_RUN;
 
+
+//------------------------------------------------------------------------------
+// CUDA RUNTIME REPLACEMENTS
+//------------------------------------------------------------------------------
 
 cudaError_t
 cudaMalloc (void **devPtr, size_t size)
@@ -39,8 +46,23 @@ cudaMalloc (void **devPtr, size_t size)
     CUdeviceptr dev_mem;
     void* host_mem;
 
-    // decide what to do with this... knob
-    use_global = search();
+    // Decide what to do with current knob
+    if (CUZMEM_RUN == op_mode) {
+        // 1) Load plan for this project
+
+        // 2) Using current_knob, determine malloc location
+        use_global = call_tuner (CUZMEM_TUNER_LOOKUP);
+
+        // 3) Allocate either pinned host or global device memory
+    }
+    else if (CUZMEM_TUNE == op_mode) {
+        // 1) Load plan draft for this iteration
+
+        // 2) Lookup current_knob in plan draft, determine malloc location
+        use_global = call_tuner (CUZMEM_TUNER_LOOKUP);
+
+        // 3) Allocate either pinned host or global device memory
+    }
 
     if (use_global) {
         // allocate gpu global memory
@@ -54,13 +76,15 @@ cudaMalloc (void **devPtr, size_t size)
     *devPtr = (void *)dev_mem;
 
 #if defined (DEBUG)
-    printf ("*** | %s : %s | [%i KB] - #%i/%i\n",
+    printf ("libcuzmem: %s:%s | %i KB  [%i/%i]\n",
             project_name, plan_name, (unsigned int)(size / 1024),
             current_knob, num_knobs-1);
 #endif
 
+    // Get ready for next knob
     current_knob++;
 
+    // Morph CUDA Driver return codes into CUDA Runtime codes
     switch (driver_return)
     {
     case CUDA_SUCCESS:
@@ -78,96 +102,150 @@ cudaMalloc (void **devPtr, size_t size)
 }
 
 
-int
-cuzmem_search_exhaustive ()
-{
-#if defined (DEBUG)
-    printf ("** Going with Global!\n");
-#endif
 
-    // use gpu global memory
-    return 1;
-}
+//------------------------------------------------------------------------------
+// FRAMEWORK FUNCTIONS
+//------------------------------------------------------------------------------
 
-
-void
-cuzmem_search (enum cuzmem_search_mode search_mode)
-{
-    switch (search_mode)
-    {
-    case CUZMEM_EXHAUSTIVE:
-    case CUZMEM_MAGIC:
-    default:
-        search = cuzmem_search_exhaustive;
-    }
-}
-
-
+// Called at start of each plan invocation
 void
 cuzmem_start (enum cuzmem_op_mode m)
 {
-    op_mode = m;
+    char debug_mode[20];
+
+    // This state info is modified for all engines.
     current_knob = 0;
+    op_mode = m;
+
 #if defined (DEBUG)
-    if (op_mode == CUZMEM_RUN) {
-        printf ("libcuzmem: mode is CUZMEM_RUN\n");
+    if (CUZMEM_RUN == op_mode) {
+        strcpy (debug_mode, "CUZMEM_RUN");
     }
-    else if (op_mode == CUZMEM_TUNE) {
-        printf ("libcuzmem: mode is CUZMEM_TUNE\n");
+    else if (CUZMEM_TUNE == op_mode) {
+        strcpy (debug_mode, "CUZMEM_TUNE");
     }
     else {
-        printf ("libcuzmem: mode is UNKNOWN?!\n");
+        printf ("libcuzmem: unknown operation mode specified! (exiting)\n");
+        exit (1);
     }
+
+    printf ("libcuzmem: mode is %s\n", debug_mode);
 #endif
+
+    // Invoke Tuner's "Start of Plan" routine.
+    call_tuner (CUZMEM_TUNER_START);
 }
 
 
+// Called at end of each plan invocation
 cuzmem_op_mode
 cuzmem_end ()
 {
-    if (CUZMEM_RUN == op_mode) {
-        // Do run mode stuff here
-    }
-    else if (CUZMEM_TUNE == op_mode) {
-        // Record # of malloc encounters
-        if (current_knob > num_knobs) {
-            num_knobs = current_knob;
-        }
-    }
-    else {
-        // This should never happen
-    }
+    // Ask the selected Tuner Engine what to do.
+    call_tuner (CUZMEM_TUNER_END);
 
+    // Return this back to calling program so that the
+    // framework will know what to do next: next iteration
+    // or stop iterating.
     return op_mode;
 }
 
 
+
+//------------------------------------------------------------------------------
+// USER INTERFACE FUNCTIONS
+//------------------------------------------------------------------------------
+
+// Used to select/define CUZMEM project
 void
-cuzmem_plan (char* plan)
+cuzmem_set_project (char* project)
+{
+    strcpy (project_name, project);
+}
+
+
+// Used to select/define CUZMEM plan
+void
+cuzmem_set_plan (char* plan)
 {
     strcpy (plan_name, plan);
 }
 
 
+// Used to select Tuning Engine
 void
-cuzmem_project (char* project)
+cuzmem_set_tuner (enum cuzmem_tuner t)
 {
-    strcpy (project_name, project);
+    switch (t)
+    {
+    case CUZMEM_EXHAUSTIVE:
+    default:
+        call_tuner = cuzmem_tuner_exhaustive;
+    }
 }
 
-#if defined (commentout)
-void
-cuzmem_plan (int count, ...)
+
+
+//------------------------------------------------------------------------------
+// TUNING ENGINES
+//------------------------------------------------------------------------------
+
+// The default Tuning Engine
+int
+cuzmem_tuner_exhaustive (enum cuzmem_tuner_action action)
 {
-    int i;
-    va_list knobs;
+    if (CUZMEM_RUN == op_mode) {
+        if (CUZMEM_TUNER_START == action) {
+            // For now, do nothing special.
+            return 0;
+        }
+        else if (CUZMEM_TUNER_LOOKUP == action) {
+            // For now, just blindly put everything in device global
+            return 1;
+        }
+        else if (CUZMEM_TUNER_END == action) {
+            // For now, do nothing special.
+            return 0;
+        }
+        else {
+            printf ("libcuzmem: tuner asked to perform unknown run action!\n");
+            exit (1);
+        }
+    }
+    else if (CUZMEM_TUNE == op_mode) {
+        if (CUZMEM_TUNER_START == action) {
+            // For now, do nothing special.
+            printf ("libcuzmem: iteration %i/%i\n", tune_iter, tune_iter_max);
+            return 0;
+        }
+        else if (CUZMEM_TUNER_LOOKUP == action) {
+            // For now, just blindly put everything in device global
+            return 1;
+        }
+        else if (CUZMEM_TUNER_END == action) {
+            // Record # of malloc encounters
+            if (current_knob > num_knobs) {
+                num_knobs = current_knob;
+                tune_iter_max = (unsigned int)pow (2, num_knobs);
+            }
 
-    va_start (knobs, count);
+            // Increment tune iteration count
+            tune_iter++;
 
-    for (i=0; i<count; i++) {
-        
+            // Have we exhausted the search space?
+            if (tune_iter >= tune_iter_max) {
+                // If so, stop iterating
+                op_mode = CUZMEM_RUN;
+            }
+                return 0;
+            }
+        else {
+            printf ("libcuzmem: tuner asked to perform unknown tune action!\n");
+            exit (1);
+        }
     }
 
-    va_end (knobs);
+    // We should never get to here
+    exit (1);
+    return 0;
 }
-#endif
