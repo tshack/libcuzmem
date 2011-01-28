@@ -38,58 +38,64 @@ struct plan_entry_struct
 
 
 // Search algorithms... currently only the one.
-int cuzptune_search_exhaustive ();
+int cuzmem_search_exhaustive ();
 
-enum cuzptune_search_mode {
-    CUZPTUNE_EXHAUSTIVE,
-    CUZPTUNE_MAGIC
+enum cuzmem_search_mode {
+    CUZMEM_EXHAUSTIVE,
+    CUZMEM_MAGIC
 };
 
+// libcuzmem modes
+enum cuzmem_mode {
+    CUZMEM_RUN,
+    CUZMEM_TUNE
+};
 
 #if defined __cplusplus
 extern "C" {
 #endif
-    void cuzptune_start ();
-    void cuzptune_end ();
-    void cuzptune_project (char* project);
-    void cuzptune_plan (char* plan);
-    void cuzptune_search (enum cuzptune_search_mode mode);
-//    void cuzptune_plan (int count, ...);
+    void cuzmem_start (enum cuzmem_mode m);
+    void cuzmem_end ();
+    void cuzmem_project (char* project);
+    void cuzmem_plan (char* plan);
+    void cuzmem_search (enum cuzmem_search_mode mode);
+//    void cuzmem_plan (int count, ...);
 #if defined __cplusplus
 };
 #endif
 
 
-#define CUZP_LOAD_SYMBOL(sym, lib)                                         \
-    *(void **)(&sym) = dlsym (lib, #sym);                                   
-
-#define CUZP_HOOK_CUDA_MALLOC                                              \
-    cudaError_t (*cudaMalloc)(void**, size_t);                             \
-                                                                           \
-    void* libcuzptune = dlopen ("./libcuzptune.so", RTLD_LAZY);            \
-    if (!libcuzptune) { printf ("Error Loading libcuzptune\n"); exit(1); } \
-    *(void **)(&cudaMalloc) = dlsym (libcuzptune, "cudaMalloc");            
+#define CUZMEM_LOAD_SYMBOL(sym, lib)                                   \
+    *(void **)(&sym) = dlsym (lib, #sym);                               
 
 
-#define CUZP_BENCH_INIT                                                    \
-    void (*cuzptune_start)();                                              \
-    void (*cuzptune_end)();                                                \
-    void (*cuzptune_project)(char*);                                       \
-    void (*cuzptune_plan)(char*);                                          \
-                                                                           \
-    void* libcuzptune = dlopen ("./libcuzptune.so", RTLD_LAZY);            \
-    if (!libcuzptune) { printf ("Error Loading libcuzptune\n"); exit(1); } \
-    CUZP_LOAD_SYMBOL (cuzptune_start, libcuzptune);                        \
-    CUZP_LOAD_SYMBOL (cuzptune_end, libcuzptune);                          \
-    CUZP_LOAD_SYMBOL (cuzptune_project, libcuzptune);                      \
-    CUZP_LOAD_SYMBOL (cuzptune_plan, libcuzptune);                          
+#define CUZMEM_HOOK_CUDA_MALLOC                                        \
+    cudaError_t (*cudaMalloc)(void**, size_t);                         \
+                                                                       \
+    void* libcuzmem = dlopen ("./libcuzmem.so", RTLD_LAZY);            \
+    if (!libcuzmem) { printf ("Error Loading libcuzmem\n"); exit(1); } \
+    *(void **)(&cudaMalloc) = dlsym (libcuzmem, "cudaMalloc");          
 
 
-#define CUZP_START   cuzp_start_label: cuzptune_start() ;
+#define CUZMEM_BENCH_INIT                                              \
+    void (*cuzmem_start)();                                            \
+    void (*cuzmem_end)();                                              \
+    void (*cuzmem_project)(char*);                                     \
+    void (*cuzmem_plan)(char*);                                        \
+                                                                       \
+    void* libcuzmem = dlopen ("./libcuzmem.so", RTLD_LAZY);            \
+    if (!libcuzmem) { printf ("Error Loading libcuzmem\n"); exit(1); } \
+    CUZMEM_LOAD_SYMBOL (cuzmem_start, libcuzmem);                      \
+    CUZMEM_LOAD_SYMBOL (cuzmem_end, libcuzmem);                        \
+    CUZMEM_LOAD_SYMBOL (cuzmem_project, libcuzmem);                    \
+    CUZMEM_LOAD_SYMBOL (cuzmem_plan, libcuzmem);                        
 
-#define CUZP_END                             \
-    cuzptune_end ();                         \
-    goto cuzp_start_label;                    
+
+#define CUZMEM_START(mode)   cuzmem_start_label: cuzmem_start(mode) ;
+
+#define CUZMEM_END                             \
+    cuzmem_end ();                             \
+    goto cuzmem_start_label;                    
     
 
-#endif // #ifndef __cuzptune_h__
+#endif // #ifndef __cuzmem_h__
