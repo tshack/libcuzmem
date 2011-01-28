@@ -24,6 +24,9 @@
 
 #define DEBUG
 
+//------------------------------------------------------------------------------
+// STATE SYMBOLS                            ...I know!
+//------------------------------------------------------------------------------
 char plan_name[FILENAME_MAX];
 char project_name[FILENAME_MAX];
 int (*call_tuner)(enum cuzmem_tuner_action) = cuzmem_tuner_exhaustive;
@@ -49,6 +52,7 @@ cudaMalloc (void **devPtr, size_t size)
     // Decide what to do with current knob
     if (CUZMEM_RUN == op_mode) {
         // 1) Load plan for this project
+//        plan_load (plan_name, project_name);
 
         // 2) Using current_knob, determine malloc location
         use_global = call_tuner (CUZMEM_TUNER_LOOKUP);
@@ -76,9 +80,9 @@ cudaMalloc (void **devPtr, size_t size)
     *devPtr = (void *)dev_mem;
 
 #if defined (DEBUG)
-    printf ("libcuzmem: %s:%s | %i KB  [%i/%i]\n",
+    printf ("libcuzmem: %s:%s | %i KB  [%i/%i] ondev:%i\n",
             project_name, plan_name, (unsigned int)(size / 1024),
-            current_knob, num_knobs-1);
+            current_knob, num_knobs-1, use_global);
 #endif
 
     // Get ready for next knob
