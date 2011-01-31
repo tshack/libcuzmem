@@ -36,12 +36,21 @@ SET ( SRC_LIBCUZMEM
     libcuzmem.cu
 )
 
+SET ( SRC_TEST
+    test.c
+    plans.c
+)
+
 ########################################################
 
 
 ## BUILD TARGETS #######################################
 CUDA_ADD_LIBRARY ( cuzmem SHARED
     ${SRC_LIBCUZMEM}
+)
+
+ADD_EXECUTABLE ( test
+    ${SRC_TEST}
 )
 ########################################################
 
