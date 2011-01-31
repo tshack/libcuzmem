@@ -25,6 +25,7 @@ struct cuzmem_plan_entry
     int id;
     size_t size;
     int loc;      // 0: pinned cpu, 1: gpu global
+    int inloop;
 
     void* gpu_pointer;
     void* cpu_pointer;

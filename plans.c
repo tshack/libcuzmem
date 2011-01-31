@@ -61,6 +61,14 @@ plan_add_entry (
     int line_len = 0;
     cuzmem_plan* entry = (cuzmem_plan*) malloc (sizeof(cuzmem_plan));
 
+    // populate entry with default values
+    entry->id = 0;
+    entry->size = 0;
+    entry->loc = 1;
+    entry->inloop = 0;
+    entry->cpu_pointer = NULL;
+    entry->gpu_pointer = NULL;
+
     while (fgets (linebuf, 128, fp)) {
         // Comments start with # (skip to next line)
         if (linebuf[0] == '#') {
@@ -97,6 +105,18 @@ plan_add_entry (
             }
             else {
                 fprintf (stderr, "libcuzmem: bad memory location specified.\n");
+                exit (1);
+            }
+        }
+        else if (!strcmp (cmd, "inloop")) {
+            if (!strcmp (parm, "true")) {
+                entry->loc = 1;
+            }
+            else if (!strcmp (parm, "false")) {
+                entry->loc = 0;
+            }
+            else {
+                fprintf (stderr, "libcuzmem: bad inloop specification.\n");
                 exit (1);
             }
         }
@@ -245,6 +265,9 @@ write_plan (cuzmem_plan* plan, char *project_name, char *plan_name)
                 else {
                     fprintf (stderr, "libcuzmem: attempted to write invalid memory spec to plan!\n");
                     exit (1);
+                }
+                if (curr->inloop == 1) {
+                    fprintf (fp, "  inloop true\n");
                 }
                 fprintf (fp, "end\n\n");
                 break;
