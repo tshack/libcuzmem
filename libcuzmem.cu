@@ -23,7 +23,7 @@
 #include "libcuzmem.h"
 #include "plans.h"
 
-#define DEBUG
+//#define DEBUG
 
 //------------------------------------------------------------------------------
 // STATE SYMBOLS                            ...I know!
@@ -42,43 +42,86 @@ enum cuzmem_op_mode op_mode = CUZMEM_RUN;
 // CUDA RUNTIME REPLACEMENTS
 //------------------------------------------------------------------------------
 
+CUresult
+alloc_mem (cuzmem_plan* entry, size_t size)
+{
+    CUresult ret;
+    CUdeviceptr dev_mem;
+    void* host_mem = NULL;
+
+    if (entry->loc == 1) {
+        // allocate gpu global memory
+        ret = cuMemAlloc (&dev_mem, (unsigned int)size);
+
+        // record in entry entry for cudaFree() later on
+        entry->gpu_pointer = (void *)dev_mem;
+    }
+    else if (entry->loc == 0) {
+        // allocate pinned host memory (probably broken for now)
+        ret = cuMemAllocHost ((void **)&host_mem, (unsigned int)size);
+        if (ret != CUDA_SUCCESS) { return CUDA_ERROR_INVALID_VALUE; };
+        ret = cuMemHostGetDevicePointer (&dev_mem, host_mem, 0);
+
+        // record in entry entry for cudaFree() later on
+        entry->cpu_pointer = (void *)host_mem;
+        entry->gpu_pointer = (void *)dev_mem;
+    }
+    else {
+        // unspecified memory location
+        fprintf (stderr, "libcuzmem: entry specifed malloc to neither pinned nor global memory!\n");
+        exit (1);
+    }
+
+    return ret;
+}
+
+
 cudaError_t
 cudaMalloc (void **devPtr, size_t size)
 {
+    CUresult ret;
     int use_global;
-    CUresult driver_return;
-    CUdeviceptr dev_mem;
-    void* host_mem = NULL;
     cuzmem_plan *plan = NULL;
+    cuzmem_plan *curr = NULL;
+
+    *devPtr = NULL;
 
     // Decide what to do with current knob
     if (CUZMEM_RUN == op_mode) {
         // 1) Load plan for this project
         // TODO: Move this file I/O out of here (to CUZMEM_TUNER_INIT, perhaps?)
         plan = read_plan (project_name, plan_name);
+        curr = plan;
 
         // 2) Lookup malloc type for this knob & allocate
-        while (plan != NULL) {
-            if (plan->id == current_knob) {
-                if (plan->loc == 1) {
-                    // allocate gpu global memory
-                    driver_return = cuMemAlloc (&dev_mem, (unsigned int)size);
-                }
-                else if (plan->loc == 0) {
-                    // allocate pinned host memory (probably broken for now)
-                    driver_return = cuMemAllocHost ((void **)&host_mem, (unsigned int)size);
-                    if (driver_return != CUDA_SUCCESS) { return cudaErrorMemoryAllocation; };
-                    driver_return = cuMemHostGetDevicePointer (&dev_mem, host_mem, 0);
-                }
-                else {
-                    // unspecified memory location
-                    fprintf (stderr, "libcuzmem: plan specifed malloc to neither pinned nor global memory!\n");
-                    exit (1);
-                }
-                *devPtr = (void *)dev_mem;
+        while (curr != NULL) {
+            if (curr->id == current_knob) {
+                ret = alloc_mem (curr, size);
+                *devPtr = curr->gpu_pointer;
                 break;
             }
-            plan = plan->next;
+            curr = curr->next;
+        }
+
+        // Knob id exceeds those found in plan... must be in a malloc/free loop
+        if (*devPtr == NULL) {
+            fprintf (stderr, "libcuzmem: malloc/free loop detected\n");
+            
+            // Look for a free()ed "inloop" marked plan entry 
+            curr = plan;
+            while (curr != NULL) {
+                if ((curr->inloop == 1)         &&
+                    (curr->gpu_pointer == NULL) &&
+                    (curr->size == size)) {
+                        alloc_mem (curr, size);
+                } else {
+                    fprintf (stderr, "libcuzmem: unable to deduce allocation from plan!\n");
+                    exit (1);
+                }
+                curr = curr->next;
+            }
+        } else {
+            current_knob++;
         }
     }
     else if (CUZMEM_TUNE == op_mode) {
@@ -88,8 +131,10 @@ cudaMalloc (void **devPtr, size_t size)
         use_global = call_tuner (CUZMEM_TUNER_LOOKUP);
 
         // 3) Allocate either pinned host or global device memory
-    }
 
+        // Get ready for next knob
+        current_knob++;
+    }
 
 #if defined (DEBUG)
     printf ("libcuzmem: %s:%s | %i Bytes  [%i/%i] ondev:%i\n",
@@ -97,11 +142,8 @@ cudaMalloc (void **devPtr, size_t size)
             current_knob, num_knobs-1, use_global);
 #endif
 
-    // Get ready for next knob
-    current_knob++;
-
     // Morph CUDA Driver return codes into CUDA Runtime codes
-    switch (driver_return)
+    switch (ret)
     {
     case CUDA_SUCCESS:
         return (cudaSuccess);
