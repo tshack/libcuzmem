@@ -34,6 +34,7 @@ ENDIF (CUDA_FOUND)
 ## BUILD TARGET SOURCE FILES ###########################
 SET ( SRC_LIBCUZMEM
     libcuzmem.cu
+    plans.c
 )
 
 SET ( SRC_TEST
