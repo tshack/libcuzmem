@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <sys/stat.h>
+#include <string.h>
 
 #include "libcuzmem.h"
 #include "plans.h"
@@ -126,6 +127,8 @@ read_plan (char *project_name, char *plan_name)
     unsigned int line_number;
     int line_len;
     cuzmem_plan *plan = NULL;
+
+    strcpy (filename, "");
 
     home = getenv ("HOME");
     strcat (filename, home);

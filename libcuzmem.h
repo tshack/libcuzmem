@@ -20,7 +20,6 @@
 
 #include <cuda.h>
 #include <dlfcn.h>
-#include "plans.h"
 
 // -- Tuning Engine stuff ------------------------
 enum cuzmem_tuner_action {
