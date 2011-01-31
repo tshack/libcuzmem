@@ -24,8 +24,6 @@
 
 #define DEBUG
 
-// SVN Commit Test (sourceforge.net security issue)
-
 //------------------------------------------------------------------------------
 // STATE SYMBOLS                            ...I know!
 //------------------------------------------------------------------------------
@@ -82,8 +80,8 @@ cudaMalloc (void **devPtr, size_t size)
     *devPtr = (void *)dev_mem;
 
 #if defined (DEBUG)
-    printf ("libcuzmem: %s:%s | %i KB  [%i/%i] ondev:%i\n",
-            project_name, plan_name, (unsigned int)(size / 1024),
+    printf ("libcuzmem: %s:%s | %i Bytes  [%i/%i] ondev:%i\n",
+            project_name, plan_name, (unsigned int)(size),
             current_knob, num_knobs-1, use_global);
 #endif
 

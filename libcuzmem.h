@@ -20,6 +20,7 @@
 
 #include <cuda.h>
 #include <dlfcn.h>
+#include "plans.h"
 
 // -- Tuning Engine stuff ------------------------
 enum cuzmem_tuner_action {
@@ -99,23 +100,7 @@ extern "C" {
         goto cuzmem_start_label;               \
     }                                           
 // -----------------------------------------------
+
     
-
-
-#if defined (commentout)
-typedef struct plan_entry_struct plan_entry;
-struct plan_entry_struct
-{
-    int knob_id;
-
-    void* gpu_pointer;
-    void* cpu_pointer;
-
-    size_t size;
-
-    plan_entry* next;
-};
-#endif
-
 
 #endif // #ifndef __cuzmem_h__
