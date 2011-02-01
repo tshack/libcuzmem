@@ -69,10 +69,12 @@ extern "C" {
 
 #define CUZMEM_HOOK_CUDA_MALLOC                                        \
     cudaError_t (*cudaMalloc)(void**, size_t);                         \
+    cudaError_t (*cudaFree)(void*);                                    \
                                                                        \
     void* libcuzmem = dlopen ("./libcuzmem.so", RTLD_LAZY);            \
     if (!libcuzmem) { printf ("Error Loading libcuzmem\n"); exit(1); } \
-    *(void **)(&cudaMalloc) = dlsym (libcuzmem, "cudaMalloc");          
+    *(void **)(&cudaMalloc) = dlsym (libcuzmem, "cudaMalloc");         \
+    *(void **)(&cudaFree)   = dlsym (libcuzmem, "cudaFree");            
 
 
 #define CUZMEM_BENCH_INIT                                              \

@@ -29,6 +29,7 @@ struct cuzmem_plan_entry
 
     void* gpu_pointer;
     void* cpu_pointer;
+    CUdeviceptr gpu_dptr;
 
     cuzmem_plan* next;
 };

@@ -110,10 +110,10 @@ plan_add_entry (
         }
         else if (!strcmp (cmd, "inloop")) {
             if (!strcmp (parm, "true")) {
-                entry->loc = 1;
+                entry->inloop = 1;
             }
             else if (!strcmp (parm, "false")) {
-                entry->loc = 0;
+                entry->inloop = 0;
             }
             else {
                 fprintf (stderr, "libcuzmem: bad inloop specification.\n");
