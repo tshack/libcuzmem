@@ -56,6 +56,7 @@ alloc_mem (cuzmem_plan* entry, size_t size)
 
         // record in entry entry for cudaFree() later on
         entry->gpu_pointer = (void *)dev_mem;
+        entry->gpu_dptr = dev_mem;
     }
     else if (entry->loc == 0) {
         // allocate pinned host memory (probably broken for now)
@@ -104,7 +105,9 @@ cudaMalloc (void **devPtr, size_t size)
 
         // Knob id exceeds those found in plan... must be in a malloc/free loop
         if (*devPtr == NULL) {
+#if defined (DEBUG)
             fprintf (stderr, "libcuzmem: malloc/free loop detected\n");
+#endif
 
             // Look for a free()ed "inloop" marked plan entry 
             entry = plan;
@@ -116,7 +119,9 @@ cudaMalloc (void **devPtr, size_t size)
                 if ((entry->inloop == 1)         &&
                     (entry->gpu_pointer == NULL) &&
                     (entry->size == size)) {
+#if defined (DEBUG)
                         printf ("libcuzmem: looking for %i byte plan entry ...found (%i).\n", (int)entry->size, entry->id);
+#endif
                         ret = alloc_mem (entry, size);
                         if (ret != CUDA_SUCCESS) {
                             fprintf (stderr, "libcuzmem: inloop alloc_mem() failed [%i]\n", ret);
@@ -206,9 +211,7 @@ cudaFree (void *devPtr)
 
     if (ret != CUDA_SUCCESS) {
         fprintf (stderr, "libcuzmem: cudaFree() failed\n");
-    } else {
-        fprintf (stderr, "libcuzmem: %i bytes free\n", (unsigned int)entry->size);
-    }
+    } 
 
     // Morph CUDA Driver return codes into CUDA Runtime codes
     switch (ret)
@@ -329,7 +332,6 @@ cuzmem_tuner_exhaustive (enum cuzmem_tuner_action action)
             return 1;
         }
         else if (CUZMEM_TUNER_END == action) {
-            printf ("resetting\n");
             current_knob = 0;
             return 0;
         }
