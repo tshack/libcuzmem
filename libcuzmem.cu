@@ -83,50 +83,48 @@ cudaMalloc (void **devPtr, size_t size)
 {
     CUresult ret;
     int use_global;
-    cuzmem_plan *curr = NULL;
+    cuzmem_plan *entry = NULL;
 
     *devPtr = NULL;
 
     // Decide what to do with current knob
     if (CUZMEM_RUN == op_mode) {
         // 1) Load plan for this project
-        // TODO: Move this file I/O out of here (to CUZMEM_TUNER_INIT, perhaps?)
-        curr = plan;
+        entry = plan;
 
         // 2) Lookup malloc type for this knob & allocate
-        while (curr != NULL) {
-            if (curr->id == current_knob) {
-                ret = alloc_mem (curr, size);
-                *devPtr = curr->gpu_pointer;
+        while (entry != NULL) {
+            if (entry->id == current_knob) {
+                ret = alloc_mem (entry, size);
+                *devPtr = entry->gpu_pointer;
                 break;
             }
-            curr = curr->next;
+            entry = entry->next;
         }
 
         // Knob id exceeds those found in plan... must be in a malloc/free loop
         if (*devPtr == NULL) {
             fprintf (stderr, "libcuzmem: malloc/free loop detected\n");
-            
+
             // Look for a free()ed "inloop" marked plan entry 
-            curr = plan;
+            entry = plan;
             while (1) {
-                if (curr == NULL) {
+                if (entry == NULL) {
                     fprintf (stderr, "libcuzmem: unable to deduce allocation from plan!\n");
                     exit (1);
                 }
-                if ((curr->inloop == 1)         &&
-                    (curr->gpu_pointer == NULL) &&
-                    (curr->size == size)) {
-                        printf ("Desired Size: %i\n", size);
-                        printf ("       Found: %i (%i|%p) ...success.\n", curr->size, curr->inloop, curr->gpu_pointer);
-                        ret = alloc_mem (curr, size);
-                        *devPtr = curr->gpu_pointer;
+                if ((entry->inloop == 1)         &&
+                    (entry->gpu_pointer == NULL) &&
+                    (entry->size == size)) {
+                        printf ("libcuzmem: looking for %i byte plan entry ...found (%i).\n", (int)entry->size, entry->id);
+                        ret = alloc_mem (entry, size);
+                        if (ret != CUDA_SUCCESS) {
+                            fprintf (stderr, "libcuzmem: inloop alloc_mem() failed [%i]\n", ret);
+                        }
+                        *devPtr = entry->gpu_pointer;
                         break;
-                } else {
-                    printf ("Desired Size: %i\n", size);
-                    printf ("       Found: %i (%i|%p)\n", curr->size, curr->inloop, curr->gpu_pointer);
                 }
-                curr = curr->next;
+                entry = entry->next;
             }
         } else {
             current_knob++;
@@ -171,29 +169,32 @@ cudaError_t
 cudaFree (void *devPtr)
 {
     CUresult ret;
-    cuzmem_plan *curr = NULL;
+    cuzmem_plan *entry = NULL;
 
     // Decide how to free this chunk of gpu mapped memory
     if (CUZMEM_RUN == op_mode) {
-        curr = plan;
+        entry = plan;
 
         // Lookup plan entry for this gpu pointer
         while (1) {
-            if (curr == NULL) {
+            if (entry == NULL) {
                 fprintf (stderr, "libcuzmem: attempt to free invalid pointer (%p).\n", devPtr);
                 exit (1);
             }
-            if (curr->gpu_pointer == devPtr) {
+            if (entry->gpu_pointer == devPtr) {
                 break;
             }
-            curr = curr->next;
+            entry = entry->next;
         }
 
         // Was it pinned cpu memory or real gpu memory?
-        if (curr->cpu_pointer == NULL) {
+        if (entry->cpu_pointer == NULL) {
             // real gpu memory
-            ret = cuMemFree (curr->gpu_dptr);
-            curr->gpu_pointer = NULL;
+#if defined (DEBUG)
+            printf ("libcuzmem: freeing %i\n", entry->id);
+#endif
+            ret = cuMemFree (entry->gpu_dptr);
+            entry->gpu_pointer = NULL;
         } else {
             // pinned cpu memory
             // NOT YET IMPLEMENTED !
@@ -201,6 +202,12 @@ cudaFree (void *devPtr)
     }
     else if (CUZMEM_TUNE == op_mode) {
         // NOT YET IMPLEMENTED !
+    }
+
+    if (ret != CUDA_SUCCESS) {
+        fprintf (stderr, "libcuzmem: cudaFree() failed\n");
+    } else {
+        fprintf (stderr, "libcuzmem: %i bytes free\n", (unsigned int)entry->size);
     }
 
     // Morph CUDA Driver return codes into CUDA Runtime codes
