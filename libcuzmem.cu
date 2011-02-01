@@ -455,9 +455,6 @@ cuzmem_tuner_exhaustive (enum cuzmem_tuner_action action, void* parm)
         // reset current knob for next tune iteration
         current_knob = 0;
 
-        // TODO
-        tune_iter = 99999999;
-
         // have we exhausted the search space?
         if (tune_iter >= tune_iter_max) {
             // if so, stop iterating
