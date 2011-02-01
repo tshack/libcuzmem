@@ -31,8 +31,6 @@ enum cuzmem_tuner_action {
 enum cuzmem_tuner {
     CUZMEM_EXHAUSTIVE
 };
-
-int cuzmem_tuner_exhaustive (enum cuzmem_tuner_action action);
 // -----------------------------------------------
 
 
