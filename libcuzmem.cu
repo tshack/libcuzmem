@@ -37,6 +37,7 @@ unsigned int tune_iter = 0;
 unsigned int tune_iter_max = 0;
 enum cuzmem_op_mode op_mode = CUZMEM_RUN;
 
+cuzmem_plan *plan = NULL;
 
 //------------------------------------------------------------------------------
 // CUDA RUNTIME REPLACEMENTS
@@ -65,6 +66,7 @@ alloc_mem (cuzmem_plan* entry, size_t size)
         // record in entry entry for cudaFree() later on
         entry->cpu_pointer = (void *)host_mem;
         entry->gpu_pointer = (void *)dev_mem;
+        entry->gpu_dptr = dev_mem;
     }
     else {
         // unspecified memory location
@@ -81,7 +83,6 @@ cudaMalloc (void **devPtr, size_t size)
 {
     CUresult ret;
     int use_global;
-    cuzmem_plan *plan = NULL;
     cuzmem_plan *curr = NULL;
 
     *devPtr = NULL;
@@ -90,7 +91,6 @@ cudaMalloc (void **devPtr, size_t size)
     if (CUZMEM_RUN == op_mode) {
         // 1) Load plan for this project
         // TODO: Move this file I/O out of here (to CUZMEM_TUNER_INIT, perhaps?)
-        plan = read_plan (project_name, plan_name);
         curr = plan;
 
         // 2) Lookup malloc type for this knob & allocate
@@ -109,14 +109,22 @@ cudaMalloc (void **devPtr, size_t size)
             
             // Look for a free()ed "inloop" marked plan entry 
             curr = plan;
-            while (curr != NULL) {
+            while (1) {
+                if (curr == NULL) {
+                    fprintf (stderr, "libcuzmem: unable to deduce allocation from plan!\n");
+                    exit (1);
+                }
                 if ((curr->inloop == 1)         &&
                     (curr->gpu_pointer == NULL) &&
                     (curr->size == size)) {
-                        alloc_mem (curr, size);
+                        printf ("Desired Size: %i\n", size);
+                        printf ("       Found: %i (%i|%p) ...success.\n", curr->size, curr->inloop, curr->gpu_pointer);
+                        ret = alloc_mem (curr, size);
+                        *devPtr = curr->gpu_pointer;
+                        break;
                 } else {
-                    fprintf (stderr, "libcuzmem: unable to deduce allocation from plan!\n");
-                    exit (1);
+                    printf ("Desired Size: %i\n", size);
+                    printf ("       Found: %i (%i|%p)\n", curr->size, curr->inloop, curr->gpu_pointer);
                 }
                 curr = curr->next;
             }
@@ -159,7 +167,57 @@ cudaMalloc (void **devPtr, size_t size)
 
 }
 
+cudaError_t
+cudaFree (void *devPtr)
+{
+    CUresult ret;
+    cuzmem_plan *curr = NULL;
 
+    // Decide how to free this chunk of gpu mapped memory
+    if (CUZMEM_RUN == op_mode) {
+        curr = plan;
+
+        // Lookup plan entry for this gpu pointer
+        while (1) {
+            if (curr == NULL) {
+                fprintf (stderr, "libcuzmem: attempt to free invalid pointer (%p).\n", devPtr);
+                exit (1);
+            }
+            if (curr->gpu_pointer == devPtr) {
+                break;
+            }
+            curr = curr->next;
+        }
+
+        // Was it pinned cpu memory or real gpu memory?
+        if (curr->cpu_pointer == NULL) {
+            // real gpu memory
+            ret = cuMemFree (curr->gpu_dptr);
+            curr->gpu_pointer = NULL;
+        } else {
+            // pinned cpu memory
+            // NOT YET IMPLEMENTED !
+        }
+    }
+    else if (CUZMEM_TUNE == op_mode) {
+        // NOT YET IMPLEMENTED !
+    }
+
+    // Morph CUDA Driver return codes into CUDA Runtime codes
+    switch (ret)
+    {
+    case CUDA_SUCCESS:
+        return (cudaSuccess);
+    case CUDA_ERROR_DEINITIALIZED:
+    case CUDA_ERROR_NOT_INITIALIZED:
+        return (cudaErrorInitializationError);
+    case CUDA_ERROR_INVALID_CONTEXT:
+    case CUDA_ERROR_INVALID_VALUE:
+    case CUDA_ERROR_OUT_OF_MEMORY:
+    default:
+        return (cudaErrorInvalidDevicePointer);
+    }
+}
 
 //------------------------------------------------------------------------------
 // FRAMEWORK FUNCTIONS
@@ -189,6 +247,8 @@ cuzmem_start (enum cuzmem_op_mode m)
 
     printf ("libcuzmem: mode is %s\n", debug_mode);
 #endif
+
+    plan = read_plan (project_name, plan_name);
 
     // Invoke Tuner's "Start of Plan" routine.
     call_tuner (CUZMEM_TUNER_START);
