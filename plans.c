@@ -52,8 +52,8 @@ rm_whitespace (char *str)
 void
 plan_add_entry (
     cuzmem_plan** plan,
-    char* cmd,
-    char* parm,
+    char** cmd,
+    char** parm,
     char* linebuf,
     FILE* fp
 )
@@ -83,24 +83,24 @@ plan_add_entry (
             continue;
         }
 
-        cmd  = (char*) realloc (cmd, line_len * sizeof(char));
-        parm = (char*) realloc (parm, line_len * sizeof(char));
+        *cmd  = (char*) realloc (*cmd, line_len * sizeof(char));
+        *parm = (char*) realloc (*parm, line_len * sizeof(char));
 
         // Get the command/parameter set
-        sscanf (linebuf, "%s %s", cmd, parm);
+        sscanf (linebuf, "%s %s", *cmd, *parm);
 
         // Populate plan entry
-        if (!strcmp (cmd, "id")) {
-            entry->id = atoi(parm);
+        if (!strcmp (*cmd, "id")) {
+            entry->id = atoi(*parm);
         }
-        else if (!strcmp (cmd, "size")) {
-            entry->size = atoi(parm);
+        else if (!strcmp (*cmd, "size")) {
+            entry->size = atoi(*parm);
         }
-        else if (!strcmp (cmd, "loc")) {
-            if (!strcmp (parm, "global")) {
+        else if (!strcmp (*cmd, "loc")) {
+            if (!strcmp (*parm, "global")) {
                 entry->loc = 1;
             }
-            else if (!strcmp (parm, "pinned")) {
+            else if (!strcmp (*parm, "pinned")) {
                 entry->loc = 0;
             }
             else {
@@ -108,11 +108,11 @@ plan_add_entry (
                 exit (1);
             }
         }
-        else if (!strcmp (cmd, "inloop")) {
-            if (!strcmp (parm, "true")) {
+        else if (!strcmp (*cmd, "inloop")) {
+            if (!strcmp (*parm, "true")) {
                 entry->inloop = 1;
             }
-            else if (!strcmp (parm, "false")) {
+            else if (!strcmp (*parm, "false")) {
                 entry->inloop = 0;
             }
             else {
@@ -120,7 +120,7 @@ plan_add_entry (
                 exit (1);
             }
         }
-        else if (!strcmp (cmd, "end")) {
+        else if (!strcmp (*cmd, "end")) {
             break;
         }
         else {
@@ -139,6 +139,8 @@ plan_add_entry (
 cuzmem_plan*
 read_plan (char *project_name, char *plan_name)
 {
+    // TODO: Check valid project_name & plan_name before reading
+    //
     FILE *fp;
     char filename[FILENAME_MAX];
     char linebuf[128];
@@ -190,10 +192,10 @@ read_plan (char *project_name, char *plan_name)
         sscanf (linebuf, "%s %s", cmd, parm);
 
         if (!strcmp (cmd, "begin")) {
-            plan_add_entry (&plan, cmd, parm, linebuf, fp);
+            plan_add_entry (&plan, &cmd, &parm, linebuf, fp);
         }
     }
-    
+
     free (cmd);
     free (parm);
 

@@ -53,6 +53,10 @@ cudaMalloc (void **devPtr, size_t size)
 
     *devPtr = NULL;
 
+#if defined (DEBUG)
+    fprintf (stderr, "libcuzmem: cudaMalloc() called\n");
+#endif
+
     // Decide what to do with current knob
     if (CUZMEM_RUN == op_mode) {
         // 1) Load plan for this project
@@ -104,6 +108,7 @@ cudaMalloc (void **devPtr, size_t size)
         int use_global;
 
         // 1) Load plan draft for this iteration
+        
 
         // 2) Lookup current_knob in plan draft, determine malloc location
         use_global = call_tuner (CUZMEM_TUNER_LOOKUP);
@@ -115,9 +120,9 @@ cudaMalloc (void **devPtr, size_t size)
     }
 
 #if defined (DEBUG)
-    printf ("libcuzmem: %s:%s | %i Bytes  [%i/%i] ondev:%i\n",
+    printf ("libcuzmem: %s:%s | %i Bytes  [%i/%i]\n",
             project_name, plan_name, (unsigned int)(size),
-            current_knob, num_knobs-1, use_global);
+            current_knob, num_knobs-1);
 #endif
 
     // Morph CUDA Driver return codes into CUDA Runtime codes
@@ -262,11 +267,15 @@ cuzmem_start (enum cuzmem_op_mode m)
     printf ("libcuzmem: mode is %s\n", debug_mode);
 #endif
 
-    plan = read_plan (project_name, plan_name);
-
+    if (CUZMEM_RUN == op_mode) {
+        plan = read_plan (project_name, plan_name);
+    }
     // Invoke Tuner's "Start of Plan" routine.
-    if (CUZMEM_TUNE == op_mode) {
+    else if (CUZMEM_TUNE == op_mode) {
         call_tuner (CUZMEM_TUNER_START);
+    }
+    else {
+        fprintf (stderr, "libcuzmem: unknown operation mode specified!\n");
     }
 }
 
@@ -296,6 +305,10 @@ cuzmem_end ()
 void
 cuzmem_set_project (char* project)
 {
+#if defined (DEBUG)
+    fprintf (stderr, "libcuzmem: cuzmem_set_project() called\n");
+#endif
+
     strcpy (project_name, project);
 }
 
@@ -304,6 +317,10 @@ cuzmem_set_project (char* project)
 void
 cuzmem_set_plan (char* plan)
 {
+#if defined (DEBUG)
+    fprintf (stderr, "libcuzmem: cuzmem_set_plan() called\n");
+#endif
+
     strcpy (plan_name, plan);
 }
 
