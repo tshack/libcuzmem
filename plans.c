@@ -219,6 +219,8 @@ write_plan (cuzmem_plan* plan, char *project_name, char *plan_name)
     unsigned int num_entries = 0;
     cuzmem_plan* curr = plan;
 
+    strcpy (filename, "");
+
     home = getenv ("HOME");
     strcat (filename, home);
     strcat (filename, "/.");
