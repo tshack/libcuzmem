@@ -35,6 +35,7 @@ ENDIF (CUDA_FOUND)
 SET ( SRC_LIBCUZMEM
     libcuzmem.cu
     plans.c
+    tuner_exhaust.c
 )
 
 SET ( SRC_TEST
