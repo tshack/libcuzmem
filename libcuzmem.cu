@@ -213,8 +213,14 @@ alloc_mem (cuzmem_plan* entry, size_t size)
     }
     else if (entry->loc == 0) {
         // allocate pinned host memory (probably broken for now)
-        ret = cuMemAllocHost ((void **)&host_mem, (unsigned int)size);
-        if (ret != CUDA_SUCCESS) { return CUDA_ERROR_INVALID_VALUE; };
+        ret = cuMemHostAlloc ((void **)&host_mem, size,
+                CU_MEMHOSTALLOC_PORTABLE |
+                CU_MEMHOSTALLOC_DEVICEMAP |
+                CU_MEMHOSTALLOC_WRITECOMBINED);
+        if (ret != CUDA_SUCCESS) {
+            fprintf (stderr, "libcuzmem: failed to pin cpu memory [%i]\n", ret);
+            return CUDA_ERROR_INVALID_VALUE;
+        };
         ret = cuMemHostGetDevicePointer (&dev_mem, host_mem, 0);
 
         // record in entry for cudaFree() later on
@@ -222,6 +228,8 @@ alloc_mem (cuzmem_plan* entry, size_t size)
             entry->cpu_pointer = (void *)host_mem;
             entry->gpu_pointer = (void *)dev_mem;
             entry->gpu_dptr = dev_mem;
+        } else {
+            fprintf (stderr, "libcuzmem: failed to map pinned cpu memory\n");
         }
     }
     else {
