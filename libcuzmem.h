@@ -47,7 +47,7 @@ enum cuzmem_op_mode {
 extern "C" {
 #endif
     // Framework symbols
-    void cuzmem_start (enum cuzmem_op_mode m);
+    void cuzmem_start (enum cuzmem_op_mode m, CUdevice cuda_dev);
     enum cuzmem_op_mode cuzmem_end ();
     // User symbols
     void cuzmem_set_project (char* project);
@@ -76,7 +76,7 @@ extern "C" {
 
 
 #define CUZMEM_BENCH_INIT                                              \
-    void (*cuzmem_start)();                                            \
+    void (*cuzmem_start)(enum cuzmem_op_mode, CUdevice);               \
     enum cuzmem_op_mode (*cuzmem_end)();                               \
     void (*cuzmem_set_project)(char*);                                 \
     void (*cuzmem_set_plan)(char*);                                    \
@@ -91,7 +91,7 @@ extern "C" {
     CUZMEM_LOAD_SYMBOL (cuzmem_set_tuner, libcuzmem);                   
 
 
-#define CUZMEM_START(mode)   cuzmem_start_label: cuzmem_start(mode) ;
+#define CUZMEM_START(mode,gpu_id)   cuzmem_start_label: cuzmem_start(mode,gpu_id) ;
 
 
 #define CUZMEM_END                             \
