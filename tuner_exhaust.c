@@ -17,7 +17,6 @@
 
 #include <stdio.h>
 #include <math.h>
-#include <limits.h>
 #include "tuner.h"
 #include "tuner_exhaust.h"
 #include "plans.h"
@@ -67,7 +66,8 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
             return NULL;
         }
         else {
-
+            // start timing the iteration
+            start_time = get_time ();
         }
 
         // Return value currently has no meaning
@@ -174,9 +174,11 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         return entry;
     }
     else if (CUZMEM_TUNER_END == action) {
+        double time;
         cuzmem_plan* entry = NULL;
         int all_global = 1;
 
+        //------------------------------------------------------------
         // do special stuff @ end of tune iteration zero
         if (tune_iter == 0) {
 
@@ -204,10 +206,21 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
             if (num_knobs <= sizeof(unsigned long long) * WORD_SIZE) {
                 tune_iter_max = (unsigned long long)pow (2, num_knobs);
             } else {
-                fprintf (stderr, "libcuzmem: memory allocation limit exceeded!\n");
+                fprintf (stderr, "libcuzmem: allocation symbol limit exceeded!\n");
                 exit(0);
             }
         }
+        //------------------------------------------------------------
+
+        // get the time to complete this iteration
+        time = get_time() - start_time;
+
+        if (time < best_time) {
+            best_time = time;
+            best_plan = tune_iter;
+        }
+
+        printf ("libcuzmem: best plan is #%i of %i\n", best_plan, tune_iter_max);
 
         // reset current knob for next tune iteration
         current_knob = 0;
@@ -218,8 +231,13 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
             printf ("libcuzmem: auto-tuning complete.\n");
             op_mode = CUZMEM_RUN;
 
-            // ...and write out the plan
-            write_plan (plan, "plastimatch", "foobaz");
+            // ...and write out the best plan
+            entry = plan;
+            while (entry != NULL) {
+                entry->loc = (best_plan >> entry->id) & 0x0001;
+                entry = entry->next;
+            }
+            write_plan (plan, project_name, plan_name);
         }
 
         // return value currently has no meaning

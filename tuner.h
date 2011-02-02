@@ -31,6 +31,9 @@ extern "C" {
 CUresult
 alloc_mem (cuzmem_plan* entry, size_t size);
 
+double
+get_time ();
+
 #if defined __cplusplus
 }
 #endif
@@ -43,5 +46,8 @@ extern unsigned long long current_knob;
 extern unsigned long long tune_iter_max;
 extern enum cuzmem_op_mode op_mode;
 extern cuzmem_plan *plan;
+extern unsigned long start_time;
+extern unsigned long best_time;
+extern unsigned int best_plan;
 
 #endif
