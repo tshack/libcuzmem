@@ -137,42 +137,37 @@ cudaFree (void *devPtr)
     CUresult ret;
     cuzmem_plan *entry = NULL;
 
-    // Decide how to free this chunk of gpu mapped memory
-//    if (CUZMEM_RUN == op_mode) {
-        entry = plan;
+    entry = plan;
 
-        // Lookup plan entry for this gpu pointer
-        while (1) {
-            if (entry == NULL) {
-                fprintf (stderr, "libcuzmem: attempt to free invalid pointer (%p).\n", devPtr);
-                exit (1);
-            }
-            if (entry->gpu_pointer == devPtr) {
-                break;
-            }
-            entry = entry->next;
+    // Lookup plan entry for this gpu pointer
+    while (1) {
+        if (entry == NULL) {
+            fprintf (stderr, "libcuzmem: attempt to free invalid pointer (%p).\n", devPtr);
+            exit (1);
         }
+        if (entry->gpu_pointer == devPtr) {
+            break;
+        }
+        entry = entry->next;
+    }
 
-        // Was it pinned cpu memory or real gpu memory?
-        if (entry->cpu_pointer == NULL) {
-            // real gpu memory
+    // Was it pinned cpu memory or real gpu memory?
+    if (entry->cpu_pointer == NULL) {
+        // real gpu memory
+        ret = cuMemFree (entry->gpu_dptr);
+        entry->gpu_pointer = NULL;
+    } else {
+        // pinned cpu memory
+        ret = cuMemFreeHost (entry->cpu_pointer);
+        entry->gpu_pointer = NULL;
+        entry->cpu_pointer = NULL;
+    }
+
 #if defined (DEBUG)
-            printf ("libcuzmem: freeing %i\n", entry->id);
-#endif
-            ret = cuMemFree (entry->gpu_dptr);
-            entry->gpu_pointer = NULL;
-        } else {
-            // pinned cpu memory
-            // NOT YET IMPLEMENTED !
-        }
-//    }
-//    else if (CUZMEM_TUNE == op_mode) {
-        // NOT YET IMPLEMENTED !
-//    }
-
     if (ret != CUDA_SUCCESS) {
         fprintf (stderr, "libcuzmem: cudaFree() failed\n");
     } 
+#endif
 
     // Morph CUDA Driver return codes into CUDA Runtime codes
     switch (ret)
