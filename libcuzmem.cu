@@ -38,8 +38,10 @@ unsigned int num_knobs = 0;
 unsigned long long tune_iter = 0;
 unsigned long long tune_iter_max = 0;
 enum cuzmem_op_mode op_mode = CUZMEM_RUN;
-
 cuzmem_plan *plan = NULL;
+
+CUcontext cuda_context;
+
 
 //------------------------------------------------------------------------------
 // CUDA RUNTIME REPLACEMENTS
@@ -107,7 +109,7 @@ cudaMalloc (void **devPtr, size_t size)
         }
     }
 
-#if defined (DEBUG)
+#if defined (DEBUG_ANNOY)
     printf ("libcuzmem: %s:%s | %i Bytes  [%i/%i]\n",
             project_name, plan_name, (unsigned int)(size),
             current_knob, num_knobs);
@@ -202,6 +204,9 @@ alloc_mem (cuzmem_plan* entry, size_t size)
     void* host_mem = NULL;
 
     if (entry->loc == 1) {
+#if defined (DEBUG)
+        fprintf (stderr, "libcuzmem: allocating %i B (global)\n", size);
+#endif
         // allocate gpu global memory
         ret = cuMemAlloc (&dev_mem, (unsigned int)size);
 
@@ -209,10 +214,18 @@ alloc_mem (cuzmem_plan* entry, size_t size)
         if (ret == CUDA_SUCCESS) {
             entry->gpu_pointer = (void *)dev_mem;
             entry->gpu_dptr = dev_mem;
+        } else {
+#if defined (DEBUG)
+        fprintf (stderr, "libcuzmem: failed allocating %i B (global) [%i]\n", size, ret);
+#endif
         }
+
     }
     else if (entry->loc == 0) {
-        // allocate pinned host memory (probably broken for now)
+#if defined (DEBUG)
+        fprintf (stderr, "libcuzmem: allocating %i B (pinned)\n", size);
+#endif
+        // allocate pinned host memory
         ret = cuMemHostAlloc ((void **)&host_mem, size,
                 CU_MEMHOSTALLOC_PORTABLE |
                 CU_MEMHOSTALLOC_DEVICEMAP |
@@ -249,13 +262,34 @@ alloc_mem (cuzmem_plan* entry, size_t size)
 
 // Called at start of each plan invocation
 void
-cuzmem_start (enum cuzmem_op_mode m)
+cuzmem_start (enum cuzmem_op_mode m, CUdevice cuda_dev)
 {
 #if defined (DEBUG)
     char debug_mode[20];
 #endif
 
-    // This state info is modified for all engines.
+    // we handle CUDA context stuff here
+    if (tune_iter == 0) {
+        CUresult ret;
+
+        cuInit(0);
+
+        // 1st: if the CUDA runtime has already created a context,
+        //      we will simply latch on to it
+        ret = cuCtxAttach (&cuda_context, 0);
+
+        if (ret != CUDA_SUCCESS) {
+            // 2nd: if a CUDA runtime generated context does not
+            //      exist, we will simply create one
+#if defined (DEBUG)
+            fprintf (stderr, "libcuzmem: unable to latch onto CUDA Runtime API context\n");
+            fprintf (stderr, "libcuzmem: creating CUDA Driver API context\n");
+#endif
+            cuCtxCreate (&cuda_context, CU_CTX_SCHED_AUTO | CU_CTX_MAP_HOST, cuda_dev);
+        }
+    }
+
+    // This state info is modified for all tuners.
     current_knob = 0;
     op_mode = m;
 
