@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 cuzmem_plan*
-cuzmem_tuner_exhaustive (enum cuzmem_tuner_action action, void* parm);
+cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm);
 
 #if defined __cplusplus
 };
