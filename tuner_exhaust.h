@@ -15,45 +15,22 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _plans_h_
-#define _plans_h_
+#ifndef _tuner_exhaust_h_
+#define _tuner_exhaust_h_
 
-#include <stdlib.h>
-
-// -- Plan structure -----------------------------
-typedef struct cuzmem_plan_entry cuzmem_plan;
-struct cuzmem_plan_entry
-{
-    int id;
-    size_t size;
-    int loc;      // 0: pinned cpu, 1: gpu global
-    int inloop;
-
-    void* gpu_pointer;
-    void* cpu_pointer;
-    CUdeviceptr gpu_dptr;
-
-    cuzmem_plan* next;
-};
-// -----------------------------------------------
+#include "libcuzmem.h"
+#include "plans.h"
 
 
 #if defined __cplusplus
 extern "C" {
 #endif
 
-size_t
-rm_whitespace (char *str);
-
 cuzmem_plan*
-read_plan (char *project_name, char *plan_name);
-
-void
-write_plan (cuzmem_plan* plan, char *project_name, char *plan_name);
+cuzmem_tuner_exhaustive (enum cuzmem_tuner_action action, void* parm);
 
 #if defined __cplusplus
 };
 #endif
 
-
-#endif // #ifndef _plans_h_
+#endif

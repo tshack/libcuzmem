@@ -15,8 +15,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef __cuzmem_h__
-#define __cuzmem_h__
+#ifndef _cuzmem_h_
+#define _cuzmem_h_
 
 #include <cuda.h>
 #include <dlfcn.h>
@@ -102,4 +102,4 @@ extern "C" {
 
     
 
-#endif // #ifndef __cuzmem_h__
+#endif // #ifndef _cuzmem_h_
