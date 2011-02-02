@@ -17,7 +17,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <cuda.h>
+#include <sys/time.h>
+
 #include "libcuzmem.h"
 #include "plans.h"
 #include "tuner_exhaust.h"
@@ -26,6 +29,9 @@
 
 extern "C"
 CUresult alloc_mem (cuzmem_plan* entry, size_t size);
+
+extern "C"
+double get_time();
 
 //------------------------------------------------------------------------------
 // STATE SYMBOLS                            ...I know!
@@ -39,8 +45,11 @@ unsigned long long tune_iter = 0;
 unsigned long long tune_iter_max = 0;
 enum cuzmem_op_mode op_mode = CUZMEM_RUN;
 cuzmem_plan *plan = NULL;
+unsigned long start_time = 0;
+unsigned long best_time = ULONG_MAX;
+unsigned int best_plan = 0;
 
-CUcontext cuda_context;
+CUcontext cuda_context = NULL;
 
 
 //------------------------------------------------------------------------------
@@ -191,6 +200,7 @@ cudaFree (void *devPtr)
 // CUDA RUNTIME REPLACEMENT HELPERS
 //------------------------------------------------------------------------------
 
+// handles actual process of memory allocation
 CUresult
 alloc_mem (cuzmem_plan* entry, size_t size)
 {
@@ -249,6 +259,15 @@ alloc_mem (cuzmem_plan* entry, size_t size)
     return ret;
 }
 
+
+// simply returns the time
+double
+get_time ()
+{
+    struct timeval tv;
+    gettimeofday (&tv, 0);
+    return ((double) tv.tv_sec) + ((double) tv.tv_usec) / 1000000.;
+}
 
 
 //------------------------------------------------------------------------------
@@ -316,6 +335,14 @@ cuzmem_end ()
     if (CUZMEM_TUNE == op_mode) {
         call_tuner (CUZMEM_TUNER_END, NULL);
         tune_iter++;
+    }
+
+    if (CUZMEM_RUN == op_mode) {
+        // we are done with the CUDA context.  if it
+        // was created by us, we need to destry it.
+        if (cuda_context != NULL) {
+            cuCtxDestroy (cuda_context);
+        }
     }
 
     // Return this back to calling program so that the
