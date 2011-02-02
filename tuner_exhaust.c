@@ -17,15 +17,45 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <limits.h>
 #include "tuner.h"
 #include "tuner_exhaust.h"
 #include "plans.h"
+
+#define WORD_SIZE 8
+
+// returns number of bits required to express n combinations
+unsigned int
+num_bits (unsigned long long n)
+{
+    unsigned int exp = 0;
+    unsigned long long p = 2;
+    while (p < n && p != 0) {
+        ++exp;
+        p *= 2;
+    }
+    return exp + 1;
+}
+
+unsigned int
+detect_inloop (cuzmem_plan** entry, size_t size)
+{
+    while (*entry != NULL) {
+        if (((*entry)->size == size) && ((*entry)->gpu_pointer == NULL)) {
+            // found a malloc/free loop within tuning loop
+            return 1;
+        }
+        *entry = (*entry)->next;
+    }
+
+    return 0;
+}
 
 //------------------------------------------------------------------------------
 // TUNER INTERFACE
 //------------------------------------------------------------------------------
 cuzmem_plan*
-cuzmem_tuner_exhaustive (enum cuzmem_tuner_action action, void* parm)
+cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
 {
     if (CUZMEM_TUNER_START == action) {
         // For now, do nothing special.
@@ -35,9 +65,8 @@ cuzmem_tuner_exhaustive (enum cuzmem_tuner_action action, void* parm)
             // is also determining the search space.
             printf ("libcuzmem: starting exhaustive tune\n");
             return NULL;
-        } else {
-            // we now know the search space and we also know
-            // that everything doesn't fit into GPU global
+        }
+        else {
 
         }
 
@@ -58,13 +87,7 @@ cuzmem_tuner_exhaustive (enum cuzmem_tuner_action action, void* parm)
         if (tune_iter == 0) {
             // 1st try to detect if this allocation is an inloop entry.
             entry = plan;
-            while (entry != NULL) {
-                if ((entry->size == size) && (entry->gpu_pointer == NULL)) {
-                    is_inloop = 1;
-                    break;
-                }
-                entry = entry->next;
-            }
+            is_inloop = detect_inloop (&entry, size);
 
             if (is_inloop) {
                 entry->inloop = 1;
@@ -104,6 +127,48 @@ cuzmem_tuner_exhaustive (enum cuzmem_tuner_action action, void* parm)
         } else {
             // tuning iteration is greater than zero
 
+            // 1st try to detect if this allocation is an inloop entry.
+            entry = plan;
+            is_inloop = detect_inloop (&entry, size);
+
+            if (is_inloop) {
+                entry->inloop = 1;
+                ret = alloc_mem (entry, size);
+                if (ret != CUDA_SUCCESS) {
+                    // Note, cudaMalloc() will report a NULL return value
+                    // from call_tuner(LOOKUP) as cudaErrorMemoryAllocation
+                    entry = NULL;
+                }
+            } else {
+                entry = plan;
+                while (entry != NULL) {
+                    if (entry->id == current_knob) {
+                        break;
+                    }
+                    entry = entry->next;
+                }
+
+                entry->loc = (tune_iter >> current_knob) & 0x0001;
+
+                ret = alloc_mem (entry, size);
+                if (ret != CUDA_SUCCESS) {
+                    // This plan was bad.
+                    // We will move this allocation just to finish the tuning
+                    // cycle.  We also invalidate this plan.
+                    entry->loc ^= 0x0001;
+
+                    ret = alloc_mem (entry, size);
+                    if (ret != CUDA_SUCCESS) {
+                        // not enough CPU memory: return failure
+                        free (entry);
+                        entry = NULL;
+                    }
+
+                    // TODO
+                    // add large value to timer to invalidate this plan 
+                }
+                current_knob++;
+            }
         }
 
         return entry;
@@ -134,8 +199,14 @@ cuzmem_tuner_exhaustive (enum cuzmem_tuner_action action, void* parm)
             }
 
             // if everything didn't fit, size up the search space
-            num_knobs = current_knob;
-            tune_iter_max = (unsigned int)pow (2, num_knobs);
+            num_knobs = current_knob + 1;
+
+            if (num_knobs <= sizeof(unsigned long long) * WORD_SIZE) {
+                tune_iter_max = (unsigned long long)pow (2, num_knobs);
+            } else {
+                fprintf (stderr, "libcuzmem: memory allocation limit exceeded!\n");
+                exit(0);
+            }
         }
 
         // reset current knob for next tune iteration

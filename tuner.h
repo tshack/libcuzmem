@@ -39,8 +39,8 @@ extern char plan_name[];
 extern char project_name[];
 extern unsigned int tune_iter;
 extern unsigned int num_knobs;
-extern unsigned int current_knob;
-extern unsigned int tune_iter_max;
+extern unsigned long long current_knob;
+extern unsigned long long tune_iter_max;
 extern enum cuzmem_op_mode op_mode;
 extern cuzmem_plan *plan;
 

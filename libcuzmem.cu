@@ -32,11 +32,11 @@ CUresult alloc_mem (cuzmem_plan* entry, size_t size);
 //------------------------------------------------------------------------------
 char plan_name[FILENAME_MAX];
 char project_name[FILENAME_MAX];
-cuzmem_plan* (*call_tuner)(enum cuzmem_tuner_action, void*) = cuzmem_tuner_exhaustive;
+cuzmem_plan* (*call_tuner)(enum cuzmem_tuner_action, void*) = cuzmem_tuner_exhaust;
 unsigned int current_knob = 0;
 unsigned int num_knobs = 0;
-unsigned int tune_iter = 0;
-unsigned int tune_iter_max = 0;
+unsigned long long tune_iter = 0;
+unsigned long long tune_iter_max = 0;
 enum cuzmem_op_mode op_mode = CUZMEM_RUN;
 
 cuzmem_plan *plan = NULL;
@@ -110,7 +110,7 @@ cudaMalloc (void **devPtr, size_t size)
 #if defined (DEBUG)
     printf ("libcuzmem: %s:%s | %i Bytes  [%i/%i]\n",
             project_name, plan_name, (unsigned int)(size),
-            current_knob, num_knobs-1);
+            current_knob, num_knobs);
 #endif
 
     // Morph CUDA Driver return codes into CUDA Runtime codes
@@ -217,7 +217,7 @@ alloc_mem (cuzmem_plan* entry, size_t size)
         if (ret != CUDA_SUCCESS) { return CUDA_ERROR_INVALID_VALUE; };
         ret = cuMemHostGetDevicePointer (&dev_mem, host_mem, 0);
 
-        // record in entry entry for cudaFree() later on
+        // record in entry for cudaFree() later on
         if (ret == CUDA_SUCCESS) {
             entry->cpu_pointer = (void *)host_mem;
             entry->gpu_pointer = (void *)dev_mem;
@@ -325,7 +325,7 @@ cuzmem_set_tuner (enum cuzmem_tuner t)
     {
     case CUZMEM_EXHAUSTIVE:
     default:
-        call_tuner = cuzmem_tuner_exhaustive;
+        call_tuner = cuzmem_tuner_exhaust;
     }
 }
 
