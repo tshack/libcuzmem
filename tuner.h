@@ -49,5 +49,6 @@ extern cuzmem_plan *plan;
 extern unsigned long start_time;
 extern unsigned long best_time;
 extern unsigned int best_plan;
+extern unsigned int gpu_mem_percent;
 
 #endif
