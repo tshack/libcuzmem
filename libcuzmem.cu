@@ -25,7 +25,8 @@
 #include "plans.h"
 #include "tuner_exhaust.h"
 
-//#define DEBUG
+#define DEBUG
+//#define DEBUG_VERBOSE
 
 extern "C"
 CUresult alloc_mem (cuzmem_plan* entry, size_t size);
@@ -48,6 +49,7 @@ cuzmem_plan *plan = NULL;
 unsigned long start_time = 0;
 unsigned long best_time = ULONG_MAX;
 unsigned int best_plan = 0;
+unsigned int gpu_mem_percent = 90;
 
 CUcontext cuda_context = NULL;
 
@@ -146,9 +148,17 @@ cudaFree (void *devPtr)
     CUresult ret;
     cuzmem_plan *entry = NULL;
 
+#if defined (DEBUG_VERBOSE)
     entry = plan;
+    fprintf (stderr, "Valid pointers:\n");
+    while (entry != NULL) {
+        fprintf (stderr, "   %p\n", entry->gpu_pointer);
+        entry = entry->next;
+    }
+#endif
 
     // Lookup plan entry for this gpu pointer
+    entry = plan;
     while (1) {
         if (entry == NULL) {
             fprintf (stderr, "libcuzmem: attempt to free invalid pointer (%p).\n", devPtr);
@@ -175,7 +185,9 @@ cudaFree (void *devPtr)
 #if defined (DEBUG)
     if (ret != CUDA_SUCCESS) {
         fprintf (stderr, "libcuzmem: cudaFree() failed\n");
-    } 
+    } else {
+        fprintf (stderr, "libcuzmem: cudaFree() [%p]\n", devPtr);
+    }
 #endif
 
     // Morph CUDA Driver return codes into CUDA Runtime codes
@@ -208,13 +220,23 @@ alloc_mem (cuzmem_plan* entry, size_t size)
     CUdeviceptr dev_mem;
     void* host_mem = NULL;
 
-    if (entry->loc == 1) {
-#if defined (DEBUG)
-        fprintf (stderr, "libcuzmem: allocating %i B (global)\n", size);
+#if defined (DEBUG_VERBOSE)
+    cuzmem_plan* curr = plan;
+    fprintf (stderr, "Valid pointers:\n");
+    while (curr != NULL) {
+        fprintf (stderr, "   %p\n", curr->gpu_pointer);
+        curr = curr->next;
+    }
 #endif
+
+
+    if (entry->loc == 1) {
         // allocate gpu global memory
         ret = cuMemAlloc (&dev_mem, (unsigned int)size);
 
+#if defined (DEBUG)
+        fprintf (stderr, "libcuzmem: alloc %i B (global) [%p]\n", size, (void*)dev_mem);
+#endif
         // record in entry entry for cudaFree() later on
         if (ret == CUDA_SUCCESS) {
             entry->gpu_pointer = (void *)dev_mem;
@@ -222,14 +244,14 @@ alloc_mem (cuzmem_plan* entry, size_t size)
         } else {
 #if defined (DEBUG)
         fprintf (stderr, "libcuzmem: failed allocating %i B (global) [%i]\n", size, ret);
+        unsigned int gpu_mem_total, gpu_mem_free;
+        cuMemGetInfo (&gpu_mem_free, &gpu_mem_total);
+        fprintf (stderr, "   %i B of %i B available\n", gpu_mem_free, gpu_mem_total);
 #endif
         }
 
     }
     else if (entry->loc == 0) {
-#if defined (DEBUG)
-        fprintf (stderr, "libcuzmem: allocating %i B (pinned)\n", size);
-#endif
         // allocate pinned host memory
         ret = cuMemHostAlloc ((void **)&host_mem, size,
                 CU_MEMHOSTALLOC_PORTABLE |
@@ -240,6 +262,10 @@ alloc_mem (cuzmem_plan* entry, size_t size)
             return CUDA_ERROR_INVALID_VALUE;
         };
         ret = cuMemHostGetDevicePointer (&dev_mem, host_mem, 0);
+
+#if defined (DEBUG)
+        fprintf (stderr, "libcuzmem: alloc %i B (pinned) [%p]\n", size, (void*)dev_mem);
+#endif
 
         // record in entry for cudaFree() later on
         if (ret == CUDA_SUCCESS) {
@@ -393,3 +419,10 @@ cuzmem_set_tuner (enum cuzmem_tuner t)
     }
 }
 
+// Used to set the mimimum GPU global memory utilization
+// a plan must satisfy in order to be accepted
+void
+cuzmem_set_minimum (float p)
+{
+    gpu_mem_percent = p;
+}

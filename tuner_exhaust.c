@@ -50,6 +50,22 @@ detect_inloop (cuzmem_plan** entry, size_t size)
     return 0;
 }
 
+unsigned int
+check_inloop (cuzmem_plan** entry, size_t size)
+{
+    while (*entry != NULL) {
+        if (((*entry)->size == size)        &&
+            ((*entry)->gpu_pointer == NULL) &&
+            ((*entry)->inloop == 1)) {
+            // found a matching (& unused) inloop entry
+            return 1;
+        }
+        *entry = (*entry)->next;
+    }
+
+    return 0;
+}
+
 //------------------------------------------------------------------------------
 // TUNER INTERFACE
 //------------------------------------------------------------------------------
@@ -103,6 +119,7 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
                 entry->size = size;
                 entry->loc = 1;
                 entry->inloop = 0;
+                entry->first_hit = 1;
                 entry->cpu_pointer = NULL;
                 entry->gpu_pointer = NULL;
 
@@ -125,19 +142,25 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
                 current_knob++;
             }
         } else {
-            // tuning iteration is greater than zero
+            // TUNING ITERATION IS GREATER THAN ZERO
 
             // 1st try to detect if this allocation is an inloop entry.
             entry = plan;
-            is_inloop = detect_inloop (&entry, size);
+            is_inloop = check_inloop (&entry, size);
 
-            if (is_inloop) {
-                entry->inloop = 1;
+            // If this is the inloop's 1st hit for this tuning cycle,
+            // treat it just like any other allocation.  Otherwise,
+            // we simply allocate it just as we did earlier in the tuning
+            // cycle (and we also don't increment current_knob).
+            if (is_inloop && !entry->first_hit) {
                 ret = alloc_mem (entry, size);
                 if (ret != CUDA_SUCCESS) {
                     // Note, cudaMalloc() will report a NULL return value
                     // from call_tuner(LOOKUP) as cudaErrorMemoryAllocation
+                    // This should never happen!
                     entry = NULL;
+                } else {
+                    return entry;
                 }
             } else {
                 entry = plan;
@@ -146,6 +169,12 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
                         break;
                     }
                     entry = entry->next;
+                }
+
+                // if this is an inloop entry and it made it to
+                // here, then this is a 1st hit for this tuning cycle
+                if (entry->inloop == 1) {
+                    entry->first_hit = 0;
                 }
 
                 entry->loc = (tune_iter >> current_knob) & 0x0001;
@@ -164,8 +193,8 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
                         entry = NULL;
                     }
 
-                    // TODO
                     // add large value to timer to invalidate this plan 
+                    start_time -= (0.50*start_time);
                 }
                 current_knob++;
             }
@@ -174,9 +203,14 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         return entry;
     }
     else if (CUZMEM_TUNER_END == action) {
+        int i;
         double time;
         cuzmem_plan* entry = NULL;
         int all_global = 1;
+        int satisfied = 0;
+        unsigned int gpu_mem_free, gpu_mem_total, gpu_mem_req;
+        unsigned int gpu_mem_min;
+        CUresult ret;
 
         //------------------------------------------------------------
         // do special stuff @ end of tune iteration zero
@@ -224,6 +258,60 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
 
         // reset current knob for next tune iteration
         current_knob = 0;
+
+        // pull down GPU global memory usage from CUDA driver
+        ret = cuMemGetInfo (&gpu_mem_free, &gpu_mem_total);
+        if (ret != CUDA_SUCCESS) {
+            fprintf (stderr, "libcuzmem: could not retrieve GPU memory info from CUDA Driver!\n");
+            exit (1);
+        } else {
+            // NOTE: cuMemGetInfo /seems/ to be over reporting free memory.
+            //       *Perhaps* it is not counting memory allocated to the framebuffer
+            //       or there is some built in limit for overhead or something.
+            //       I just had an 149587200 byte allocation fail with
+            //       CUerror = 2 (out of mem) when cuMemGetInfo reported
+            //       164347904 bytes available!
+            //
+            //       So, I will say that 20MB must remain free.
+            gpu_mem_min = (unsigned int)((float)gpu_mem_free * (float)gpu_mem_percent * 0.01f);
+            gpu_mem_free -= 20000000;
+            fprintf (stderr, "  Free   GPU Memory: %i\n", gpu_mem_free);
+            fprintf (stderr, "  Total  GPU Memory: %i\n", gpu_mem_total);
+            fprintf (stderr, "  Specified Percent: %i\n", gpu_mem_percent);
+            fprintf (stderr, "  Specified Minimum: %i\n", gpu_mem_min);
+        }
+
+        // check to make sure the next iteration's plan draft
+        // meets the GPU global memory utilization constraint
+        // if it doesn't, we will skip it and subsequent plans
+        // until we find one that does.
+        //
+        // we also use this oppurtunity to clear out all of our
+        // inloop entry's 1st hit flags
+        i = tune_iter + 1;
+        do {
+            gpu_mem_req = 0;
+            entry = plan;
+            while (entry != NULL) {
+                entry->loc = (i >> entry->id) & 0x0001;
+                entry->first_hit = 1;
+                if (entry->loc == 1) {
+                    gpu_mem_req += entry->size;
+                }
+                entry = entry->next;
+            }
+
+            fprintf (stderr, "  Request for Plan %i of %llu: %i (min: %i)\n", i, tune_iter_max, gpu_mem_req, gpu_mem_min);
+
+            if ((gpu_mem_req >= gpu_mem_min) && (gpu_mem_req < gpu_mem_free)) {
+                // we subtract one beacuse tune_iter is auto-increment after this
+                // function returns (before the next tune iterations starts)
+                tune_iter = i - 1;
+                satisfied = 1;
+            } else {
+                i++;
+            }
+        } while (!satisfied);
 
         // have we exhausted the search space?
         if (tune_iter >= tune_iter_max) {
