@@ -17,6 +17,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include "context.h"
 #include "tuner.h"
 #include "tuner_exhaust.h"
 #include "plans.h"
@@ -72,9 +73,14 @@ check_inloop (cuzmem_plan** entry, size_t size)
 cuzmem_plan*
 cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
 {
+    CUZMEM_CONTEXT ctx = get_context();
+
+    // =========================================================================
+    //  TUNER START
+    // =========================================================================
     if (CUZMEM_TUNER_START == action) {
         // For now, do nothing special.
-        if (tune_iter == 0) {
+        if (ctx->tune_iter == 0) {
             // if we are in the 0th tuning cycle, do nothing here.
             // CUZMEM_TUNER_LOOKUP is building a base plan draft and
             // is also determining the search space.
@@ -83,12 +89,15 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         }
         else {
             // start timing the iteration
-            start_time = get_time ();
+            ctx->start_time = get_time ();
         }
 
         // Return value currently has no meaning
         return NULL;
     }
+    // =========================================================================
+    //  TUNER LOOKUP
+    // =========================================================================
     else if (CUZMEM_TUNER_LOOKUP == action) {
         // parm: pointer to size of allocation
         size_t size = *(size_t*)(parm);
@@ -100,9 +109,9 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         // For the 0th iteration, build a base plan draft that
         // first fills GPU global memory and then spills over
         // into pinned CPU memory.
-        if (tune_iter == 0) {
+        if (ctx->tune_iter == 0) {
             // 1st try to detect if this allocation is an inloop entry.
-            entry = plan;
+            entry = ctx->plan;
             is_inloop = detect_inloop (&entry, size);
 
             if (is_inloop) {
@@ -115,7 +124,7 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
                 }
             } else {
                 entry = (cuzmem_plan*) malloc (sizeof(cuzmem_plan));
-                entry->id = current_knob;
+                entry->id = ctx->current_knob;
                 entry->size = size;
                 entry->loc = 1;
                 entry->inloop = 0;
@@ -136,16 +145,16 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
                 }
 
                 // Insert successful entry into plan draft
-                entry->next = plan;
-                plan = entry;
+                entry->next = ctx->plan;
+                ctx->plan = entry;
 
-                current_knob++;
+                ctx->current_knob++;
             }
         } else {
             // TUNING ITERATION IS GREATER THAN ZERO
 
             // 1st try to detect if this allocation is an inloop entry.
-            entry = plan;
+            entry = ctx->plan;
             is_inloop = check_inloop (&entry, size);
 
             // If this is the inloop's 1st hit for this tuning cycle,
@@ -163,9 +172,9 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
                     return entry;
                 }
             } else {
-                entry = plan;
+                entry = ctx->plan;
                 while (entry != NULL) {
-                    if (entry->id == current_knob) {
+                    if (entry->id == ctx->current_knob) {
                         break;
                     }
                     entry = entry->next;
@@ -177,7 +186,7 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
                     entry->first_hit = 0;
                 }
 
-                entry->loc = (tune_iter >> current_knob) & 0x0001;
+                entry->loc = (ctx->tune_iter >> ctx->current_knob) & 0x0001;
 
                 ret = alloc_mem (entry, size);
                 if (ret != CUDA_SUCCESS) {
@@ -194,14 +203,17 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
                     }
 
                     // add large value to timer to invalidate this plan 
-                    start_time -= (0.50*start_time);
+                    ctx->start_time -= (0.50*ctx->start_time);
                 }
-                current_knob++;
+                ctx->current_knob++;
             }
         }
 
         return entry;
     }
+    // =========================================================================
+    //  TUNER END
+    // =========================================================================
     else if (CUZMEM_TUNER_END == action) {
         int i;
         double time;
@@ -213,11 +225,12 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         CUresult ret;
 
         //------------------------------------------------------------
-        // do special stuff @ end of tune iteration zero
-        if (tune_iter == 0) {
+        // TUNE ITERATION ZERO
+        //------------------------------------------------------------
+        if (ctx->tune_iter == 0) {
 
             // check all entries for pinned host memory usage
-            entry = plan;
+            entry = ctx->plan;
             while (entry != NULL) {
                 if (entry->loc != 1) {
                     all_global = 0;
@@ -229,35 +242,37 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
             // quit now if everything fits in gpu memory
             if (all_global) {
                 printf ("libcuzmem: auto-tuning complete.\n");
-                op_mode = CUZMEM_RUN;
-                write_plan (plan, project_name, plan_name);
+                ctx->op_mode = CUZMEM_RUN;
+                write_plan (ctx->plan, ctx->project_name, ctx->plan_name);
                 return NULL;
             }
 
             // if everything didn't fit, size up the search space
-            num_knobs = current_knob + 1;
+            ctx->num_knobs = ctx->current_knob + 1;
 
-            if (num_knobs <= sizeof(unsigned long long) * WORD_SIZE) {
-                tune_iter_max = (unsigned long long)pow (2, num_knobs);
+            if (ctx->num_knobs <= sizeof(unsigned long long) * WORD_SIZE) {
+                ctx->tune_iter_max = (unsigned long long)pow (2, ctx->num_knobs);
             } else {
                 fprintf (stderr, "libcuzmem: allocation symbol limit exceeded!\n");
                 exit(0);
             }
         }
-        //------------------------------------------------------------
 
+        //------------------------------------------------------------
+        // ALL TUNE ITERATIONS
+        //------------------------------------------------------------
         // get the time to complete this iteration
         time = get_time() - start_time;
 
-        if (time < best_time) {
-            best_time = time;
-            best_plan = tune_iter;
+        if (time < ctx->best_time) {
+            ctx->best_time = time;
+            ctx->best_plan = ctx->tune_iter;
         }
 
-        printf ("libcuzmem: best plan is #%i of %i\n", best_plan, tune_iter_max);
+        printf ("libcuzmem: best plan is #%i of %i\n", ctx->best_plan, ctx->tune_iter_max);
 
         // reset current knob for next tune iteration
-        current_knob = 0;
+        ctx->current_knob = 0;
 
         // pull down GPU global memory usage from CUDA driver
         ret = cuMemGetInfo (&gpu_mem_free, &gpu_mem_total);
@@ -273,25 +288,24 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
             //       164347904 bytes available!
             //
             //       So, I will say that 20MB must remain free.
-            gpu_mem_min = (unsigned int)((float)gpu_mem_free * (float)gpu_mem_percent * 0.01f);
+            gpu_mem_min = (unsigned int)((float)gpu_mem_free * (float)ctx->gpu_mem_percent * 0.01f);
             gpu_mem_free -= 20000000;
             fprintf (stderr, "  Free   GPU Memory: %i\n", gpu_mem_free);
             fprintf (stderr, "  Total  GPU Memory: %i\n", gpu_mem_total);
-            fprintf (stderr, "  Specified Percent: %i\n", gpu_mem_percent);
+            fprintf (stderr, "  Specified Percent: %i\n", ctx->gpu_mem_percent);
             fprintf (stderr, "  Specified Minimum: %i\n", gpu_mem_min);
         }
 
-        // check to make sure the next iteration's plan draft
-        // meets the GPU global memory utilization constraint
-        // if it doesn't, we will skip it and subsequent plans
-        // until we find one that does.
+        // check to make sure the next iteration's plan draft meets the GPU
+        // global memory utilization constraint if it doesn't, we will skip it
+        // and subsequent plans until we find one that does.
         //
-        // we also use this oppurtunity to clear out all of our
-        // inloop entry's 1st hit flags
-        i = tune_iter + 1;
+        // we also use this oppurtunity to clear out all of our inloop entry's
+        // 1st hit flags
+        i = ctx->tune_iter + 1;
         do {
             gpu_mem_req = 0;
-            entry = plan;
+            entry = ctx->plan;
             while (entry != NULL) {
                 entry->loc = (i >> entry->id) & 0x0001;
                 entry->first_hit = 1;
@@ -301,12 +315,12 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
                 entry = entry->next;
             }
 
-            fprintf (stderr, "  Request for Plan %i of %llu: %i (min: %i)\n", i, tune_iter_max, gpu_mem_req, gpu_mem_min);
+            fprintf (stderr, "  Request for Plan %i of %llu: %i (min: %i)\n", i, ctx->tune_iter_max, gpu_mem_req, gpu_mem_min);
 
             if ((gpu_mem_req >= gpu_mem_min) && (gpu_mem_req < gpu_mem_free)) {
                 // we subtract one beacuse tune_iter is auto-increment after this
                 // function returns (before the next tune iterations starts)
-                tune_iter = i - 1;
+                ctx->tune_iter = i - 1;
                 satisfied = 1;
             } else {
                 i++;
@@ -314,13 +328,13 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         } while (!satisfied);
 
         // have we exhausted the search space?
-        if (tune_iter >= tune_iter_max) {
+        if (ctx->tune_iter >= ctx->tune_iter_max) {
             // if so, stop iterating
             printf ("libcuzmem: auto-tuning complete.\n");
-            op_mode = CUZMEM_RUN;
+            ctx->op_mode = CUZMEM_RUN;
 
             // ...and write out the best plan
-            entry = plan;
+            entry = ctx->plan;
             while (entry != NULL) {
                 entry->loc = (best_plan >> entry->id) & 0x0001;
                 entry = entry->next;
@@ -331,9 +345,13 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         // return value currently has no meaning
         return NULL;
     }
+    // =========================================================================
+    // TUNER: UNKNOWN ACTION SPECIFIED
+    // =========================================================================
     else {
         printf ("libcuzmem: tuner asked to perform unknown action!\n");
         exit (1);
         return NULL;
     }
+    // =========================================================================
 }

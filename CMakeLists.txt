@@ -41,6 +41,7 @@ SET ( SRC_LIBCUZMEM
 SET ( SRC_TEST
     test.c
     plans.c
+    context.c
 )
 
 ########################################################

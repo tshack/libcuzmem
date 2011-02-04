@@ -17,11 +17,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <limits.h>
 #include <cuda.h>
 #include <sys/time.h>
+#include <sys/types.h>
 
 #include "libcuzmem.h"
+#include "context.h"
 #include "plans.h"
 #include "tuner_exhaust.h"
 
@@ -33,6 +36,7 @@ CUresult alloc_mem (cuzmem_plan* entry, size_t size);
 
 extern "C"
 double get_time();
+
 
 //------------------------------------------------------------------------------
 // STATE SYMBOLS                            ...I know!
@@ -63,17 +67,18 @@ cudaMalloc (void **devPtr, size_t size)
 {
     CUresult ret;
     cuzmem_plan *entry = NULL;
+    CUZMEM_CONTEXT ctx = get_context();
 
     *devPtr = NULL;
 
     // Decide what to do with current knob
-    if (CUZMEM_RUN == op_mode) {
+    if (CUZMEM_RUN == ctx->op_mode) {
         // 1) Load plan for this project
-        entry = plan;
+        entry = ctx->plan;
 
         // 2) Lookup malloc type for this knob & allocate
         while (entry != NULL) {
-            if (entry->id == current_knob) {
+            if (entry->id == ctx->current_knob) {
                 ret = alloc_mem (entry, size);
                 *devPtr = entry->gpu_pointer;
                 break;
@@ -84,7 +89,7 @@ cudaMalloc (void **devPtr, size_t size)
         // Knob id exceeds those found in plan... must be in a malloc/free loop
         if (*devPtr == NULL) {
             // Look for a free()ed "inloop" marked plan entry 
-            entry = plan;
+            entry = ctx->plan;
             while (1) {
                 if (entry == NULL) {
                     fprintf (stderr,"libcuzmem: unable to deduce inloop allocation from plan!\n");
@@ -106,13 +111,13 @@ cudaMalloc (void **devPtr, size_t size)
         } else {
             // Don't increment current_knob for inloop allocations,
             // they are knobs that we have already counted!
-            current_knob++;
+            ctx->current_knob++;
         }
     }
-    else if (CUZMEM_TUNE == op_mode) {
+    else if (CUZMEM_TUNE == ctx->op_mode) {
         // 1) Load plan draft for this iteration
         // 2) Lookup current_knob in plan draft, determine malloc location
-        entry = call_tuner (CUZMEM_TUNER_LOOKUP, &size);
+        entry = ctx->call_tuner (CUZMEM_TUNER_LOOKUP, &size);
         if (entry == NULL) {
             ret = CUDA_ERROR_NOT_INITIALIZED;
         } else {
@@ -122,8 +127,8 @@ cudaMalloc (void **devPtr, size_t size)
 
 #if defined (DEBUG_ANNOY)
     printf ("libcuzmem: %s:%s | %i Bytes  [%i/%i]\n",
-            project_name, plan_name, (unsigned int)(size),
-            current_knob, num_knobs);
+            ctx->project_name, ctx->plan_name, (unsigned int)(size),
+            ctx->current_knob, ctx->num_knobs);
 #endif
 
     // Morph CUDA Driver return codes into CUDA Runtime codes
@@ -146,10 +151,11 @@ cudaError_t
 cudaFree (void *devPtr)
 {
     CUresult ret;
+    CUZMEM_CONTEXT ctx = get_context();
     cuzmem_plan *entry = NULL;
 
 #if defined (DEBUG_VERBOSE)
-    entry = plan;
+    entry = ctx->plan;
     fprintf (stderr, "Valid pointers:\n");
     while (entry != NULL) {
         fprintf (stderr, "   %p\n", entry->gpu_pointer);
@@ -158,7 +164,7 @@ cudaFree (void *devPtr)
 #endif
 
     // Lookup plan entry for this gpu pointer
-    entry = plan;
+    entry = ctx->plan;
     while (1) {
         if (entry == NULL) {
             fprintf (stderr, "libcuzmem: attempt to free invalid pointer (%p).\n", devPtr);
@@ -218,10 +224,11 @@ alloc_mem (cuzmem_plan* entry, size_t size)
 {
     CUresult ret;
     CUdeviceptr dev_mem;
+    CUZMEM_CONTEXT ctx = get_context();
     void* host_mem = NULL;
 
 #if defined (DEBUG_VERBOSE)
-    cuzmem_plan* curr = plan;
+    cuzmem_plan* curr = ctx->plan;
     fprintf (stderr, "Valid pointers:\n");
     while (curr != NULL) {
         fprintf (stderr, "   %p\n", curr->gpu_pointer);
@@ -308,15 +315,17 @@ cuzmem_start (enum cuzmem_op_mode m, CUdevice cuda_dev)
     char debug_mode[20];
 #endif
 
+    CUZMEM_CONTEXT ctx = get_context();
+
     // we handle CUDA context stuff here
-    if (tune_iter == 0) {
+    if (ctx->tune_iter == 0) {
         CUresult ret;
 
         cuInit(0);
 
         // 1st: if the CUDA runtime has already created a context,
         //      we will simply latch on to it
-        ret = cuCtxAttach (&cuda_context, 0);
+        ret = cuCtxAttach (&(ctx->cuda_context), 0);
 
         if (ret != CUDA_SUCCESS) {
             // 2nd: if a CUDA runtime generated context does not
@@ -325,26 +334,26 @@ cuzmem_start (enum cuzmem_op_mode m, CUdevice cuda_dev)
             fprintf (stderr, "libcuzmem: unable to latch onto CUDA Runtime API context\n");
             fprintf (stderr, "libcuzmem: creating CUDA Driver API context\n");
 #endif
-            cuCtxCreate (&cuda_context, CU_CTX_SCHED_AUTO | CU_CTX_MAP_HOST, cuda_dev);
+            cuCtxCreate (&(ctx->cuda_context), CU_CTX_SCHED_AUTO | CU_CTX_MAP_HOST, cuda_dev);
         }
     }
 
     // This state info is modified for all tuners.
-    current_knob = 0;
-    op_mode = m;
+    ctx->current_knob = 0;
+    ctx->op_mode = m;
 
 #if defined (DEBUG)
-    if (CUZMEM_RUN == op_mode) { strcpy (debug_mode, "CUZMEM_RUN"); }
-    else if (CUZMEM_TUNE == op_mode) { strcpy (debug_mode, "CUZMEM_TUNE"); }
+    if (CUZMEM_RUN == ctx->op_mode) { strcpy (debug_mode, "CUZMEM_RUN"); }
+    else if (CUZMEM_TUNE == ctx->op_mode) { strcpy (debug_mode, "CUZMEM_TUNE"); }
     else { printf ("libcuzmem: unknown operation mode specified! (exiting)\n"); exit (1); }
     printf ("libcuzmem: mode is %s\n", debug_mode);
 #endif
 
-    if (CUZMEM_RUN == op_mode) {
-        plan = read_plan (project_name, plan_name);
+    if (CUZMEM_RUN == ctx->op_mode) {
+        plan = read_plan (ctx->project_name, ctx->plan_name);
     }
     // Invoke Tuner's "Start of Plan" routine.
-    else if (CUZMEM_TUNE == op_mode) {
+    else if (CUZMEM_TUNE == ctx->op_mode) {
         call_tuner (CUZMEM_TUNER_START, NULL);
     }
     else {
@@ -357,24 +366,26 @@ cuzmem_start (enum cuzmem_op_mode m, CUdevice cuda_dev)
 cuzmem_op_mode
 cuzmem_end ()
 {
+    CUZMEM_CONTEXT ctx = get_context();
+
     // Ask the selected Tuner Engine what to do.
-    if (CUZMEM_TUNE == op_mode) {
-        call_tuner (CUZMEM_TUNER_END, NULL);
-        tune_iter++;
+    if (CUZMEM_TUNE == ctx->op_mode) {
+        ctx->call_tuner (CUZMEM_TUNER_END, NULL);
+        ctx->tune_iter++;
     }
 
-    if (CUZMEM_RUN == op_mode) {
+    if (CUZMEM_RUN == ctx->op_mode) {
         // we are done with the CUDA context.  if it
         // was created by us, we need to destry it.
-        if (cuda_context != NULL) {
-            cuCtxDestroy (cuda_context);
+        if (ctx->cuda_context != NULL) {
+            cuCtxDestroy (ctx->cuda_context);
         }
     }
 
     // Return this back to calling program so that the
     // framework will know what to do next: next iteration
-    // or stop iterating.
-    return op_mode;
+    // or stop iterating. [ can be modified by call_tuner()
+    return ctx->op_mode;
 }
 
 
@@ -387,11 +398,9 @@ cuzmem_end ()
 void
 cuzmem_set_project (char* project)
 {
-#if defined (DEBUG)
-    fprintf (stderr, "libcuzmem: cuzmem_set_project() called\n");
-#endif
+    CUZMEM_CONTEXT ctx = get_context();
 
-    strcpy (project_name, project);
+    strcpy (ctx->project_name, project);
 }
 
 
@@ -399,11 +408,9 @@ cuzmem_set_project (char* project)
 void
 cuzmem_set_plan (char* plan)
 {
-#if defined (DEBUG)
-    fprintf (stderr, "libcuzmem: cuzmem_set_plan() called\n");
-#endif
+    CUZMEM_CONTEXT ctx = get_context();
 
-    strcpy (plan_name, plan);
+    strcpy (ctx->plan_name, plan);
 }
 
 
@@ -411,11 +418,13 @@ cuzmem_set_plan (char* plan)
 void
 cuzmem_set_tuner (enum cuzmem_tuner t)
 {
+    CUZMEM_CONTEXT ctx = get_context();
+
     switch (t)
     {
     case CUZMEM_EXHAUSTIVE:
     default:
-        call_tuner = cuzmem_tuner_exhaust;
+        ctx->call_tuner = cuzmem_tuner_exhaust;
     }
 }
 
@@ -424,5 +433,7 @@ cuzmem_set_tuner (enum cuzmem_tuner t)
 void
 cuzmem_set_minimum (float p)
 {
-    gpu_mem_percent = p;
+    CUZMEM_CONTEXT ctx = get_context();
+
+    ctx->gpu_mem_percent = p;
 }
