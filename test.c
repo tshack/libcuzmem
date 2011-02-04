@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <string.h>
-#include "libcuzmem.h"
+//#include "libcuzmem.h"
 #include "plans.h"
+#include "context.h"
 
-int
-main (void)
+
+void
+test_planfile (void)
 {
     char* buffer;
     cuzmem_plan *plan = NULL;
@@ -14,17 +16,30 @@ main (void)
     curr = plan;
 
     write_plan (plan, "plastimatch", "foobaz");
+}
 
-#if defined (commentout)
-    while (curr != NULL) {
-        printf ("begin\n");
-        printf ("  id %i\n", curr->id);
-        printf ("  size %i\n", curr->size);
-        printf ("  loc %i\n", curr->loc);
+void
+test_context (void)
+{
+    CUZMEM_CONTEXT context;
+    
+//    create_context();
 
-        curr = curr->next;
-    }
-#endif
+    context = get_context();
+
+    printf ("plan_name[] : %s\n", context->plan_name);
+    printf ("start_time  : %lu\n", context->start_time);
+    printf ("best_time   : %lu\n", context->best_time);
+
+    destroy_context ();
+}
+
+int
+main (void)
+{
+
+//    test_planfile ();
+    test_context ();
 
     return(0);
 }

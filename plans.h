@@ -19,6 +19,7 @@
 #define _plans_h_
 
 #include <stdlib.h>
+#include <cuda.h>
 
 // -- Plan structure -----------------------------
 typedef struct cuzmem_plan_entry cuzmem_plan;
