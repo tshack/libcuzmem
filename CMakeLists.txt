@@ -36,6 +36,7 @@ SET ( SRC_LIBCUZMEM
     libcuzmem.cu
     plans.c
     tuner_exhaust.c
+    context.c
 )
 
 SET ( SRC_TEST

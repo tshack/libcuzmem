@@ -31,32 +31,9 @@
 #define DEBUG
 //#define DEBUG_VERBOSE
 
-extern "C"
-CUresult alloc_mem (cuzmem_plan* entry, size_t size);
-
-extern "C"
-double get_time();
-
-
-//------------------------------------------------------------------------------
-// STATE SYMBOLS                            ...I know!
-//------------------------------------------------------------------------------
-char plan_name[FILENAME_MAX];
-char project_name[FILENAME_MAX];
-cuzmem_plan* (*call_tuner)(enum cuzmem_tuner_action, void*) = cuzmem_tuner_exhaust;
-unsigned int current_knob = 0;
-unsigned int num_knobs = 0;
-unsigned long long tune_iter = 0;
-unsigned long long tune_iter_max = 0;
-enum cuzmem_op_mode op_mode = CUZMEM_RUN;
-cuzmem_plan *plan = NULL;
-unsigned long start_time = 0;
-unsigned long best_time = ULONG_MAX;
-unsigned int best_plan = 0;
-unsigned int gpu_mem_percent = 90;
-
-CUcontext cuda_context = NULL;
-
+// some non-API function declarations I wanted to keep out of libcuzmem.h
+extern "C" CUresult alloc_mem (cuzmem_plan* entry, size_t size);
+extern "C" double get_time();
 
 //------------------------------------------------------------------------------
 // CUDA RUNTIME REPLACEMENTS
@@ -350,11 +327,11 @@ cuzmem_start (enum cuzmem_op_mode m, CUdevice cuda_dev)
 #endif
 
     if (CUZMEM_RUN == ctx->op_mode) {
-        plan = read_plan (ctx->project_name, ctx->plan_name);
+        ctx->plan = read_plan (ctx->project_name, ctx->plan_name);
     }
     // Invoke Tuner's "Start of Plan" routine.
     else if (CUZMEM_TUNE == ctx->op_mode) {
-        call_tuner (CUZMEM_TUNER_START, NULL);
+        ctx->call_tuner (CUZMEM_TUNER_START, NULL);
     }
     else {
         fprintf (stderr, "libcuzmem: unknown operation mode specified!\n");

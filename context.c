@@ -21,6 +21,7 @@
 #include <limits.h>
 #include <sys/types.h>
 #include "context.h"
+#include "tuner_exhaust.h"
 
 //------------------------------------------------------------------------------
 // CUZMEM CONTEXT STATE
@@ -57,7 +58,7 @@ create_context ()
     context[i]->best_plan = 0;
     context[i]->gpu_mem_percent = 90;
     context[i]->cuda_context = NULL;
-    context[i]->call_tuner = NULL;
+    context[i]->call_tuner = cuzmem_tuner_exhaust;
 
     return context[i];
 }
