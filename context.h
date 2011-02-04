@@ -68,6 +68,8 @@ get_context ();
 void
 destroy_context ();
 
+// Stuff from libcuzmem that doesn't need to be seen
+// by developers
 CUresult
 alloc_mem (cuzmem_plan* entry, size_t size);
 

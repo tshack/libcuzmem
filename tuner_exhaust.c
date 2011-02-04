@@ -18,7 +18,6 @@
 #include <stdio.h>
 #include <math.h>
 #include "context.h"
-#include "tuner.h"
 #include "tuner_exhaust.h"
 #include "plans.h"
 
@@ -262,7 +261,7 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         // ALL TUNE ITERATIONS
         //------------------------------------------------------------
         // get the time to complete this iteration
-        time = get_time() - start_time;
+        time = get_time() - ctx->start_time;
 
         if (time < ctx->best_time) {
             ctx->best_time = time;
@@ -336,10 +335,10 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
             // ...and write out the best plan
             entry = ctx->plan;
             while (entry != NULL) {
-                entry->loc = (best_plan >> entry->id) & 0x0001;
+                entry->loc = (ctx->best_plan >> entry->id) & 0x0001;
                 entry = entry->next;
             }
-            write_plan (plan, project_name, plan_name);
+            write_plan (ctx->plan, ctx->project_name, ctx->plan_name);
         }
 
         // return value currently has no meaning
