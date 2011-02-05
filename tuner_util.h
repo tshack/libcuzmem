@@ -28,12 +28,14 @@ extern "C" {
 unsigned int
 num_bits (unsigned long long n);
 
-
 unsigned int
 detect_inloop (cuzmem_plan** entry, size_t size);
 
 unsigned int
 check_inloop (cuzmem_plan** entry, size_t size);
+
+cuzmem_plan*
+zeroth_lookup_handler (CUZMEM_CONTEXT ctx, size_t size);
 
 #if defined __cplusplus
 };

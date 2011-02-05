@@ -18,9 +18,9 @@
 #include <stdio.h>
 #include <math.h>
 #include "context.h"
-#include "tuner_exhaust.h"
-#include "tuner_util.h"
 #include "plans.h"
+#include "tuner_util.h"
+#include "tuner_exhaust.h"
 
 #define WORD_SIZE 8
 
@@ -58,59 +58,14 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
     else if (CUZMEM_TUNER_LOOKUP == action) {
         // parm: pointer to size of allocation
         size_t size = *(size_t*)(parm);
-        char* test = NULL;
 
         CUresult ret;
         int is_inloop = 0;
         cuzmem_plan* entry = NULL;
 
-        // For the 0th iteration, build a base plan draft that
-        // first fills GPU global memory and then spills over
-        // into pinned CPU memory.
         if (ctx->tune_iter == 0) {
-            // 1st try to detect if this allocation is an inloop entry.
-            entry = ctx->plan;
-            is_inloop = detect_inloop (&entry, size);
-
-            if (is_inloop) {
-                entry->inloop = 1;
-                ret = alloc_mem (entry, size);
-                if (ret != CUDA_SUCCESS) {
-                    // Note, cudaMalloc() will report a NULL return value
-                    // from call_tuner(LOOKUP) as cudaErrorMemoryAllocation
-                    entry = NULL;
-                }
-            } else {
-                entry = (cuzmem_plan*) malloc (sizeof(cuzmem_plan));
-                entry->id = ctx->current_knob;
-                entry->size = size;
-                entry->loc = 1;
-                entry->inloop = 0;
-                entry->first_hit = 1;
-                entry->cpu_pointer = NULL;
-                entry->gpu_pointer = NULL;
-
-                ret = alloc_mem (entry, size);
-                if (ret != CUDA_SUCCESS) {
-                    // out of gpu global memory: move to pinned CPU
-                    entry->loc = 0;
-                    ret = alloc_mem (entry, size);
-                    if (ret != CUDA_SUCCESS) {
-                        // not enough CPU memory: return failure
-                        free (entry);
-                        entry = NULL;
-                    }
-                }
-
-                // Insert successful entry into plan draft
-                entry->next = ctx->plan;
-                ctx->plan = entry;
-
-                ctx->current_knob++;
-            }
+            return zeroth_lookup_handler (ctx, size);
         } else {
-            // TUNING ITERATION IS GREATER THAN ZERO
-
             // 1st try to detect if this allocation is an inloop entry.
             entry = ctx->plan;
             is_inloop = check_inloop (&entry, size);
