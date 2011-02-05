@@ -23,6 +23,10 @@
 
 #define WORD_SIZE 8
 
+//------------------------------------------------------------------------------
+// TO BE MOVED INTO tuner_util.c
+//------------------------------------------------------------------------------
+
 // returns number of bits required to express n combinations
 unsigned int
 num_bits (unsigned long long n)
@@ -36,6 +40,8 @@ num_bits (unsigned long long n)
     return exp + 1;
 }
 
+// detect if requested malloc is recurring within a single
+// optimization iteration loop
 unsigned int
 detect_inloop (cuzmem_plan** entry, size_t size)
 {
@@ -50,6 +56,8 @@ detect_inloop (cuzmem_plan** entry, size_t size)
     return 0;
 }
 
+// checks if the requested malloc is known to reoccur within
+// a single optimization iteration
 unsigned int
 check_inloop (cuzmem_plan** entry, size_t size)
 {
@@ -66,6 +74,8 @@ check_inloop (cuzmem_plan** entry, size_t size)
     return 0;
 }
 
+
+
 //------------------------------------------------------------------------------
 // TUNER INTERFACE
 //------------------------------------------------------------------------------
@@ -81,9 +91,7 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         // For now, do nothing special.
         if (ctx->tune_iter == 0) {
             // if we are in the 0th tuning cycle, do nothing here.
-            // CUZMEM_TUNER_LOOKUP is building a base plan draft and
-            // is also determining the search space.
-            printf ("libcuzmem: starting exhaustive tune\n");
+            // CUZMEM_TUNER_LOOKUP is determining the search space
             return NULL;
         }
         else {
@@ -314,7 +322,13 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
                 entry = entry->next;
             }
 
-            fprintf (stderr, "  Request for Plan %i of %llu: %i (min: %i)\n", i, ctx->tune_iter_max, gpu_mem_req, gpu_mem_min);
+            fprintf (stderr,
+                        "  Request for Plan %i of %llu: %i (min: %i)\n",
+                        i,
+                        ctx->tune_iter_max,
+                        gpu_mem_req,
+                        gpu_mem_min
+            );
 
             if ((gpu_mem_req >= gpu_mem_min) && (gpu_mem_req < gpu_mem_free)) {
                 // we subtract one beacuse tune_iter is auto-increment after this

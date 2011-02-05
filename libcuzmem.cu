@@ -29,7 +29,6 @@
 #include "tuner_exhaust.h"
 
 #define DEBUG
-//#define DEBUG_VERBOSE
 
 // some non-API function declarations I wanted to keep out of libcuzmem.h
 extern "C" CUresult alloc_mem (cuzmem_plan* entry, size_t size);
@@ -92,8 +91,9 @@ cudaMalloc (void **devPtr, size_t size)
         }
     }
     else if (CUZMEM_TUNE == ctx->op_mode) {
-        // 1) Load plan draft for this iteration
-        // 2) Lookup current_knob in plan draft, determine malloc location
+        // Lookup current_knob in plan draft.
+        // An entry is returned describing the malloc action taken
+        // NOTE: NULL is returned if no malloc occured
         entry = ctx->call_tuner (CUZMEM_TUNER_LOOKUP, &size);
         if (entry == NULL) {
             ret = CUDA_ERROR_NOT_INITIALIZED;
@@ -101,12 +101,6 @@ cudaMalloc (void **devPtr, size_t size)
             *devPtr = entry->gpu_pointer;
         }
     }
-
-#if defined (DEBUG_ANNOY)
-    printf ("libcuzmem: %s:%s | %i Bytes  [%i/%i]\n",
-            ctx->project_name, ctx->plan_name, (unsigned int)(size),
-            ctx->current_knob, ctx->num_knobs);
-#endif
 
     // Morph CUDA Driver return codes into CUDA Runtime codes
     switch (ret)
@@ -130,15 +124,6 @@ cudaFree (void *devPtr)
     CUresult ret;
     CUZMEM_CONTEXT ctx = get_context();
     cuzmem_plan *entry = NULL;
-
-#if defined (DEBUG_VERBOSE)
-    entry = ctx->plan;
-    fprintf (stderr, "Valid pointers:\n");
-    while (entry != NULL) {
-        fprintf (stderr, "   %p\n", entry->gpu_pointer);
-        entry = entry->next;
-    }
-#endif
 
     // Lookup plan entry for this gpu pointer
     entry = ctx->plan;
@@ -164,14 +149,6 @@ cudaFree (void *devPtr)
         entry->gpu_pointer = NULL;
         entry->cpu_pointer = NULL;
     }
-
-#if defined (DEBUG)
-    if (ret != CUDA_SUCCESS) {
-        fprintf (stderr, "libcuzmem: cudaFree() failed\n");
-    } else {
-        fprintf (stderr, "libcuzmem: cudaFree() [%p]\n", devPtr);
-    }
-#endif
 
     // Morph CUDA Driver return codes into CUDA Runtime codes
     switch (ret)
@@ -204,16 +181,6 @@ alloc_mem (cuzmem_plan* entry, size_t size)
     CUZMEM_CONTEXT ctx = get_context();
     void* host_mem = NULL;
 
-#if defined (DEBUG_VERBOSE)
-    cuzmem_plan* curr = ctx->plan;
-    fprintf (stderr, "Valid pointers:\n");
-    while (curr != NULL) {
-        fprintf (stderr, "   %p\n", curr->gpu_pointer);
-        curr = curr->next;
-    }
-#endif
-
-
     if (entry->loc == 1) {
         // allocate gpu global memory
         ret = cuMemAlloc (&dev_mem, (unsigned int)size);
@@ -221,16 +188,17 @@ alloc_mem (cuzmem_plan* entry, size_t size)
 #if defined (DEBUG)
         fprintf (stderr, "libcuzmem: alloc %i B (global) [%p]\n", size, (void*)dev_mem);
 #endif
+
         // record in entry entry for cudaFree() later on
         if (ret == CUDA_SUCCESS) {
             entry->gpu_pointer = (void *)dev_mem;
             entry->gpu_dptr = dev_mem;
         } else {
 #if defined (DEBUG)
-        fprintf (stderr, "libcuzmem: failed allocating %i B (global) [%i]\n", size, ret);
-        unsigned int gpu_mem_total, gpu_mem_free;
-        cuMemGetInfo (&gpu_mem_free, &gpu_mem_total);
-        fprintf (stderr, "   %i B of %i B available\n", gpu_mem_free, gpu_mem_total);
+            fprintf (stderr, "libcuzmem: failed allocating %i B (global) [%i]\n", size, ret);
+            unsigned int gpu_mem_total, gpu_mem_free;
+            cuMemGetInfo (&gpu_mem_free, &gpu_mem_total);
+            fprintf (stderr, "   %i B of %i B available\n", gpu_mem_free, gpu_mem_total);
 #endif
         }
 
@@ -288,10 +256,6 @@ get_time ()
 void
 cuzmem_start (enum cuzmem_op_mode m, CUdevice cuda_dev)
 {
-#if defined (DEBUG)
-    char debug_mode[20];
-#endif
-
     CUZMEM_CONTEXT ctx = get_context();
 
     // we handle CUDA context stuff here
@@ -307,10 +271,6 @@ cuzmem_start (enum cuzmem_op_mode m, CUdevice cuda_dev)
         if (ret != CUDA_SUCCESS) {
             // 2nd: if a CUDA runtime generated context does not
             //      exist, we will simply create one
-#if defined (DEBUG)
-            fprintf (stderr, "libcuzmem: unable to latch onto CUDA Runtime API context\n");
-            fprintf (stderr, "libcuzmem: creating CUDA Driver API context\n");
-#endif
             cuCtxCreate (&(ctx->cuda_context), CU_CTX_SCHED_AUTO | CU_CTX_MAP_HOST, cuda_dev);
         }
     }
@@ -318,13 +278,6 @@ cuzmem_start (enum cuzmem_op_mode m, CUdevice cuda_dev)
     // This state info is modified for all tuners.
     ctx->current_knob = 0;
     ctx->op_mode = m;
-
-#if defined (DEBUG)
-    if (CUZMEM_RUN == ctx->op_mode) { strcpy (debug_mode, "CUZMEM_RUN"); }
-    else if (CUZMEM_TUNE == ctx->op_mode) { strcpy (debug_mode, "CUZMEM_TUNE"); }
-    else { printf ("libcuzmem: unknown operation mode specified! (exiting)\n"); exit (1); }
-    printf ("libcuzmem: mode is %s\n", debug_mode);
-#endif
 
     if (CUZMEM_RUN == ctx->op_mode) {
         ctx->plan = read_plan (ctx->project_name, ctx->plan_name);
