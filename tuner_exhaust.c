@@ -115,8 +115,6 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         int is_inloop = 0;
         cuzmem_plan* entry = NULL;
 
-        printf ("test : %s\n", test);
-
         // For the 0th iteration, build a base plan draft that
         // first fills GPU global memory and then spills over
         // into pinned CPU memory.
