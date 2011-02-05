@@ -19,61 +19,10 @@
 #include <math.h>
 #include "context.h"
 #include "tuner_exhaust.h"
+#include "tuner_util.h"
 #include "plans.h"
 
 #define WORD_SIZE 8
-
-
-//------------------------------------------------------------------------------
-// TO BE MOVED INTO tuner_util.c
-//------------------------------------------------------------------------------
-
-// returns number of bits required to express n combinations
-unsigned int
-num_bits (unsigned long long n)
-{
-    unsigned int exp = 0;
-    unsigned long long p = 2;
-    while (p < n && p != 0) {
-        ++exp;
-        p *= 2;
-    }
-    return exp + 1;
-}
-
-// detect if requested malloc is recurring within a single
-// optimization iteration loop
-unsigned int
-detect_inloop (cuzmem_plan** entry, size_t size)
-{
-    while (*entry != NULL) {
-        if (((*entry)->size == size) && ((*entry)->gpu_pointer == NULL)) {
-            // found a malloc/free loop within tuning loop
-            return 1;
-        }
-        *entry = (*entry)->next;
-    }
-
-    return 0;
-}
-
-// checks if the requested malloc is known to reoccur within
-// a single optimization iteration
-unsigned int
-check_inloop (cuzmem_plan** entry, size_t size)
-{
-    while (*entry != NULL) {
-        if (((*entry)->size == size)        &&
-            ((*entry)->gpu_pointer == NULL) &&
-            ((*entry)->inloop == 1)) {
-            // found a matching (& unused) inloop entry
-            return 1;
-        }
-        *entry = (*entry)->next;
-    }
-
-    return 0;
-}
 
 
 
