@@ -15,6 +15,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// TODO: Make these functions thread safe
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -29,12 +31,17 @@
 cuzmem_context* context[MAX_CONTEXTS] = { NULL };
 pid_t context_lut[MAX_CONTEXTS] = { 0 };
 
+//------------------------------------------------------------------------------
+// CUZMEM CONTEXT MANAGEMENT FUNCTIONS
+//------------------------------------------------------------------------------
 
+// create a context id for calling thread
 cuzmem_context*
 create_context ()
 {
     int i=0;
 
+    // search for an available context id
     while (context[i] != NULL) {
         i++;
         if (i >=MAX_CONTEXTS) { return NULL; }
