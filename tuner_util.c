@@ -15,7 +15,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-
+#include <cuda.h>
+#include <stdlib.h>
+#include "context.h"
 #include "plans.h"
 
 // returns number of bits required to express n combinations
@@ -39,6 +41,7 @@ detect_inloop (cuzmem_plan** entry, size_t size)
     while (*entry != NULL) {
         if (((*entry)->size == size) && ((*entry)->gpu_pointer == NULL)) {
             // found a malloc/free loop within tuning loop
+            (*entry)->inloop = 1;
             return 1;
         }
         *entry = (*entry)->next;
@@ -63,4 +66,59 @@ check_inloop (cuzmem_plan** entry, size_t size)
     }
 
     return 0;
+}
+
+// standard 0th iteration logic
+// * powers through the first iteration by whatever means necessary
+// * attempts to detect "loopy" allocations
+// * builds the (0th generation) plan draft
+// * determines the search space
+// * returns entry (if NULL, we failed somehow - probably too little host mem)
+cuzmem_plan*
+zeroth_lookup_handler (CUZMEM_CONTEXT ctx, size_t size)
+{
+    if (ctx->tune_iter == 0) {
+        CUresult ret = CUDA_SUCCESS;
+        cuzmem_plan* entry = ctx->plan;
+        int loopy = detect_inloop (&entry, size);
+
+        if (loopy) {
+            ret = alloc_mem (entry, size);
+            if (ret != CUDA_SUCCESS) {
+                // Note, cudaMalloc() will report a NULL return value
+                // from call_tuner(LOOKUP) as cudaErrorMemoryAllocation
+                entry = NULL;
+            }
+        } else {
+            entry = (cuzmem_plan*) malloc (sizeof(cuzmem_plan));
+            entry->id = ctx->current_knob;
+            entry->size = size;
+            entry->loc = 1;
+            entry->inloop = 0;
+            entry->first_hit = 1;
+            entry->cpu_pointer = NULL;
+            entry->gpu_pointer = NULL;
+
+            ret = alloc_mem (entry, size);
+            if (ret != CUDA_SUCCESS) {
+
+                // out of gpu global memory: move to pinned CPU
+                entry->loc = 0;
+                ret = alloc_mem (entry, size);
+                if (ret != CUDA_SUCCESS) {
+                    // not enough CPU memory: return failure
+                    free (entry);
+                    entry = NULL;
+                }
+            }
+
+            // Insert successful entry into plan draft
+            entry->next = ctx->plan;
+            ctx->plan = entry;
+
+            ctx->current_knob++;
+        }
+
+        return entry;
+    }
 }
