@@ -30,6 +30,7 @@
 //------------------------------------------------------------------------------
 cuzmem_context* context[MAX_CONTEXTS] = { NULL };
 pid_t context_lut[MAX_CONTEXTS] = { 0 };
+void* ___tuner_state[MAX_CONTEXTS] = { NULL };
 
 //------------------------------------------------------------------------------
 // CUZMEM CONTEXT MANAGEMENT FUNCTIONS
@@ -39,7 +40,7 @@ pid_t context_lut[MAX_CONTEXTS] = { 0 };
 cuzmem_context*
 create_context ()
 {
-    int i=0;
+    unsigned int i=0;
 
     // search for an available context id
     while (context[i] != NULL) {
@@ -54,6 +55,7 @@ create_context ()
     // populate context with default values
     strcpy (context[i]->plan_name, "phantom_plan");
     strcpy (context[i]->project_name, "phantom_project");
+    context[i]->id = i;
     context[i]->current_knob = 0;
     context[i]->num_knobs = 0;
     context[i]->tune_iter = 0;
@@ -101,4 +103,25 @@ destroy_context ()
             free (context[i]);
         }
     }
+}
+
+
+// returns the context's id
+// get context id for current thread
+unsigned int
+get_context_id ()
+{
+    int i;
+    cuzmem_context* ctx;
+    pid_t pid = getpid();
+
+    for (i=0; i<MAX_CONTEXTS; i++) {
+        if (context_lut[i] == pid) {
+            return context[i]->id;
+        }
+    }
+
+    // no context, so create one and return its id
+    ctx = create_context();
+    return ctx->id;
 }

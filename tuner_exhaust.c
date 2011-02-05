@@ -23,6 +23,7 @@
 
 #define WORD_SIZE 8
 
+
 //------------------------------------------------------------------------------
 // TO BE MOVED INTO tuner_util.c
 //------------------------------------------------------------------------------
@@ -108,10 +109,13 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
     else if (CUZMEM_TUNER_LOOKUP == action) {
         // parm: pointer to size of allocation
         size_t size = *(size_t*)(parm);
+        char* test = NULL;
 
         CUresult ret;
         int is_inloop = 0;
         cuzmem_plan* entry = NULL;
+
+        printf ("test : %s\n", test);
 
         // For the 0th iteration, build a base plan draft that
         // first fills GPU global memory and then spills over

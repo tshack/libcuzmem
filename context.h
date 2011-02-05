@@ -31,6 +31,7 @@
 typedef struct cuzmem_context_instance cuzmem_context;
 struct cuzmem_context_instance
 {
+    unsigned int id;
     char plan_name[MAX_CONTEXTS];
     char project_name[MAX_CONTEXTS];
     unsigned int tune_iter;
@@ -49,9 +50,19 @@ struct cuzmem_context_instance
 typedef cuzmem_context* CUZMEM_CONTEXT;
 // -----------------------------------------------
 
-// -- Context State ------------------------------
+// -- Contexts -----------------------------------
 extern cuzmem_context* context[];
 extern pid_t context_lut[];
+// -----------------------------------------------
+
+// -- Context Persistent State Handler -----------
+#define SAVE_STATE(state_ptr)                             \
+    ___tuner_state[get_context_id()] = (void*)state_ptr    
+
+#define RESTORE_STATE(state_ptr)                          \
+    state_ptr = ___tuner_state[get_context_id()]     
+
+extern void* ___tuner_state[];
 // -----------------------------------------------
 
 
@@ -67,6 +78,9 @@ get_context ();
 
 void
 destroy_context ();
+
+unsigned int
+get_context_id ();
 
 // Stuff from libcuzmem that doesn't need to be seen
 // by developers
