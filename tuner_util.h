@@ -34,8 +34,15 @@ detect_inloop (cuzmem_plan** entry, size_t size);
 unsigned int
 check_inloop (cuzmem_plan** entry, size_t size);
 
+// standard tuner handlers
 cuzmem_plan*
 zeroth_lookup_handler (CUZMEM_CONTEXT ctx, size_t size);
+
+unsigned int
+loopy_entry (CUZMEM_CONTEXT ctx, cuzmem_plan** entry, size_t size);
+
+cuzmem_plan*
+loopy_entry_handler (cuzmem_plan* entry, size_t size);
 
 #if defined __cplusplus
 };
