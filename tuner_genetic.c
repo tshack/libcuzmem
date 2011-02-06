@@ -24,15 +24,13 @@
 #include "tuner_genetic.h"
 
 //-------------------------------------------
-#define MIN_GPU_MEM 0.70f
+#define MIN_GPU_MEM 0.90f
 #define GENERATIONS 10
 #define POPULATION  20
 #define ELITE       0.25f
 //-------------------------------------------
 
-//#define DEBUG
-
-#define WORD_SIZE 8
+#define DEBUG
 
 // -- State Macros -----------------------
 #define SAVE_STATE(state_ptr)            \
@@ -67,13 +65,19 @@ void
 sort (candidate** c, int n)
 {
     int i, j;
-    double tmp;
+    double tmp_fit;
+    unsigned long long tmp_DNA;
     for (j=0; j<(n-1); j++) {
         for (i=0; i<(n-(1+j)); i++) {
             if (c[i]->fit > c[i+1]->fit) {
-                tmp = c[i+1]->fit;
+                tmp_fit = c[i+1]->fit;
+                tmp_DNA = c[i+1]->DNA;
+
                 c[i+1]->fit = c[i]->fit;
-                c[i]->fit = tmp;
+                c[i+1]->DNA = c[i]->DNA;
+
+                c[i]->fit = tmp_fit;
+                c[i]->DNA = tmp_DNA;
             }
         }
     }
@@ -201,7 +205,7 @@ cuzmem_tuner_genetic (enum cuzmem_tuner_action action, void* parm)
                     // mate the parents
                     b[i]->DNA = c[mom]->DNA & mix; 
                     mix  = (~mix) & generate_mask(ctx->num_knobs);
-                    b[i]->DNA |= (c[dad]->DNA & mix);
+                    b[i]->DNA |= c[dad]->DNA & mix;
                 }
 
                 // make offspring the new generation
@@ -245,7 +249,7 @@ cuzmem_tuner_genetic (enum cuzmem_tuner_action action, void* parm)
 
         // retrieve candidate's location for this allocation
         c_num = (ctx->tune_iter - 1) % POPULATION;
-        loc = (c[c_num]->DNA >> ctx->current_knob) & 0x0001;
+        loc = (c[c_num]->DNA >> entry->id) & 0x0001;
 
         // assign to entry and perform allocation
         entry->loc = loc;
@@ -253,7 +257,11 @@ cuzmem_tuner_genetic (enum cuzmem_tuner_action action, void* parm)
 
         // check for environment induced mutation
         if (entry->loc != loc) {
-            c[c_num]->DNA |= loc << ctx->current_knob;
+            // clear mutated bit
+            c[c_num]->DNA &= ~(0x0001 << entry->id);
+
+            // set mutated bit
+            c[c_num]->DNA |= entry->loc << entry->id;
             SAVE_STATE (c);
         }
 
@@ -288,14 +296,6 @@ cuzmem_tuner_genetic (enum cuzmem_tuner_action action, void* parm)
         c_num = (ctx->tune_iter - 1) % POPULATION;
         c[c_num]->fit = get_time() - ctx->start_time;
 
-#if defined (commentout)
-        // record best candidate statistics
-        if (c[c_num]->fit < ctx->best_time) {
-            ctx->best_time = c[c_num]->fit;
-            ctx->best_plan = c_num;
-        }
-#endif
-
         // if we are done
         if (ctx->tune_iter >= ctx->tune_iter_max) {
             cuzmem_plan* entry = ctx->plan;
@@ -312,6 +312,7 @@ cuzmem_tuner_genetic (enum cuzmem_tuner_action action, void* parm)
             write_plan (ctx->plan, ctx->project_name, ctx->plan_name);
 
 #if defined (DEBUG)
+            fprintf (fp, "Final Generation\n");
             for (i=0; i<POPULATION; i++) {
                 fprintf (fp, "c: %i  f: %f  dna: %llu\n", i, c[i]->fit, c[i]->DNA);
             }
