@@ -58,6 +58,7 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         CUresult ret;
         int loopy = 0;
         cuzmem_plan* entry = NULL;
+        int loc;
 
         // default 0th tuning iteration handling
         if (ctx->tune_iter == 0) {
@@ -73,20 +74,11 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         // ---------------------------------------------------------------------
         entry->loc = (ctx->tune_iter >> ctx->current_knob) & 0x0001;
 
+        loc = entry->loc;
         ret = alloc_mem (entry, size);
-        if (ret != CUDA_SUCCESS) {
-            // This plan was bad.
-            // We will move this allocation just to finish the tuning
-            // cycle.  We also invalidate this plan.
-            entry->loc ^= 0x0001;
 
-            ret = alloc_mem (entry, size);
-            if (ret != CUDA_SUCCESS) {
-                // not enough CPU memory: return failure
-                free (entry);
-                entry = NULL;
-            }
-
+        // "natural mutation"
+        if (loc != entry->loc) {
             // add large value to timer to invalidate this plan 
             ctx->start_time -= (0.50*ctx->start_time);
         }
@@ -133,7 +125,7 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         ctx->current_knob = 0;
         // ---------------------------------------------------------------------
 
-        printf ("libcuzmem: best plan is #%i of %i\n", ctx->best_plan, ctx->tune_iter_max);
+        printf ("libcuzmem: best plan is #%llu of %llu\n", ctx->best_plan, ctx->tune_iter_max);
 
         // pull down GPU global memory usage from CUDA driver
         ret = cuMemGetInfo (&gpu_mem_free, &gpu_mem_total);
@@ -158,7 +150,7 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
             while (entry != NULL) {
                 entry->loc = (i >> entry->id) & 0x0001;
                 entry->first_hit = 1;
-                if (entry->loc == 1) {
+                if (entry->loc == 1 && entry->gold_member) {
                     gpu_mem_req += entry->size;
                 }
                 entry = entry->next;

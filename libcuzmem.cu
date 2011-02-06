@@ -99,6 +99,10 @@ cudaMalloc (void **devPtr, size_t size)
             ret = CUDA_ERROR_NOT_INITIALIZED;
         } else {
             *devPtr = entry->gpu_pointer;
+
+            if (ctx->tune_iter == 0) {
+                ctx->allocated_mem += size;
+            }
         }
     }
 
@@ -124,6 +128,41 @@ cudaFree (void *devPtr)
     CUresult ret;
     CUZMEM_CONTEXT ctx = get_context();
     cuzmem_plan *entry = NULL;
+
+    // -------------------------------------------------------------------------
+    // if tuning, determine the largest aggregate allocation during 0th cycle
+    if (CUZMEM_TUNE == ctx->op_mode) {
+        if (ctx->tune_iter == 0) {
+            // candidate largest alloc set, mark'em up as gold members
+            if (ctx->allocated_mem > ctx->most_mem_allocated) {
+                ctx->most_mem_allocated = ctx->allocated_mem;
+                entry = ctx->plan;
+                while (entry != NULL) {
+                    if (entry->gpu_pointer != NULL) {
+                        entry->gold_member = 1;
+                    } else {
+                        entry->gold_member = 0;
+                    }
+                    if (entry->gpu_pointer == devPtr) {
+                        ctx->allocated_mem -= entry->size;
+                    }
+                    entry = entry->next;
+                }
+            }
+            // just another free during the 0th iteration
+            else {
+                entry = ctx->plan;
+                while (entry != NULL) {
+                    if (entry->gpu_pointer == devPtr) {
+                        ctx->allocated_mem -= entry->size;
+                        break;
+                    }
+                    entry = entry->next;
+                }
+            }
+        }
+    }
+    // -------------------------------------------------------------------------
 
     // Lookup plan entry for this gpu pointer
     entry = ctx->plan;
@@ -172,61 +211,79 @@ cudaFree (void *devPtr)
 // CUDA RUNTIME REPLACEMENT HELPERS
 //------------------------------------------------------------------------------
 
-// handles actual process of memory allocation
+// handles actual process of host memory allocation
+CUresult
+alloc_mem_host (cuzmem_plan* entry, size_t size)
+{
+    CUresult ret;
+    CUdeviceptr dev_mem;
+    void* host_mem = NULL;
+
+    // allocate pinned host memory
+    ret = cuMemHostAlloc ((void **)&host_mem, size,
+            CU_MEMHOSTALLOC_PORTABLE |
+            CU_MEMHOSTALLOC_DEVICEMAP |
+            CU_MEMHOSTALLOC_WRITECOMBINED);
+    if (ret != CUDA_SUCCESS) {
+        fprintf (stderr, "libcuzmem: failed to pin cpu memory [%i]\n", ret);
+        return CUDA_ERROR_INVALID_VALUE;
+    };
+    ret = cuMemHostGetDevicePointer (&dev_mem, host_mem, 0);
+
+    // record in entry for cudaFree() later on
+    if (ret == CUDA_SUCCESS) {
+        entry->cpu_pointer = (void *)host_mem;
+        entry->gpu_pointer = (void *)dev_mem;
+        entry->gpu_dptr = dev_mem;
+    } else {
+        fprintf (stderr, "libcuzmem: failed to map pinned cpu memory\n");
+    }
+
+#if defined (DEBUG)
+        fprintf (stderr, "libcuzmem: alloc %i B (pinned) [%p]\n", (int)size, entry->gpu_pointer);
+#endif
+
+    return ret;
+}
+
+
+// handles actual process of device memory allocation
+CUresult
+alloc_mem_device (cuzmem_plan* entry, size_t size)
+{
+    CUresult ret;
+    CUdeviceptr dev_mem;
+
+    // allocate gpu global memory
+    ret = cuMemAlloc (&dev_mem, (unsigned int)size);
+
+    // record in entry entry for cudaFree() later on
+    if (ret == CUDA_SUCCESS) {
+        entry->gpu_pointer = (void *)dev_mem;
+        entry->gpu_dptr = dev_mem;
+#if defined (DEBUG)
+        fprintf (stderr, "libcuzmem: alloc %i B (global) [%p]\n", (int)size, entry->gpu_pointer);
+#endif
+    } else {
+        ret = alloc_mem_host (entry, size);
+        entry->loc = 0;
+    }
+
+    return ret;
+}
+
+
+// wrapper for memory allocation handlers
 CUresult
 alloc_mem (cuzmem_plan* entry, size_t size)
 {
     CUresult ret;
-    CUdeviceptr dev_mem;
-    CUZMEM_CONTEXT ctx = get_context();
-    void* host_mem = NULL;
 
     if (entry->loc == 1) {
-        // allocate gpu global memory
-        ret = cuMemAlloc (&dev_mem, (unsigned int)size);
-
-#if defined (DEBUG)
-        fprintf (stderr, "libcuzmem: alloc %i B (global) [%p]\n", size, (void*)dev_mem);
-#endif
-
-        // record in entry entry for cudaFree() later on
-        if (ret == CUDA_SUCCESS) {
-            entry->gpu_pointer = (void *)dev_mem;
-            entry->gpu_dptr = dev_mem;
-        } else {
-#if defined (DEBUG)
-            fprintf (stderr, "libcuzmem: failed allocating %i B (global) [%i]\n", size, ret);
-            unsigned int gpu_mem_total, gpu_mem_free;
-            cuMemGetInfo (&gpu_mem_free, &gpu_mem_total);
-            fprintf (stderr, "   %i B of %i B available\n", gpu_mem_free, gpu_mem_total);
-#endif
-        }
-
+        ret = alloc_mem_device (entry, size);
     }
     else if (entry->loc == 0) {
-        // allocate pinned host memory
-        ret = cuMemHostAlloc ((void **)&host_mem, size,
-                CU_MEMHOSTALLOC_PORTABLE |
-                CU_MEMHOSTALLOC_DEVICEMAP |
-                CU_MEMHOSTALLOC_WRITECOMBINED);
-        if (ret != CUDA_SUCCESS) {
-            fprintf (stderr, "libcuzmem: failed to pin cpu memory [%i]\n", ret);
-            return CUDA_ERROR_INVALID_VALUE;
-        };
-        ret = cuMemHostGetDevicePointer (&dev_mem, host_mem, 0);
-
-#if defined (DEBUG)
-        fprintf (stderr, "libcuzmem: alloc %i B (pinned) [%p]\n", size, (void*)dev_mem);
-#endif
-
-        // record in entry for cudaFree() later on
-        if (ret == CUDA_SUCCESS) {
-            entry->cpu_pointer = (void *)host_mem;
-            entry->gpu_pointer = (void *)dev_mem;
-            entry->gpu_dptr = dev_mem;
-        } else {
-            fprintf (stderr, "libcuzmem: failed to map pinned cpu memory\n");
-        }
+        ret = alloc_mem_host (entry, size);
     }
     else {
         // unspecified memory location

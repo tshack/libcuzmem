@@ -66,6 +66,8 @@ create_context ()
     context[i]->best_time = ULONG_MAX;
     context[i]->best_plan = 0;
     context[i]->gpu_mem_percent = 90;
+    context[i]->allocated_mem = 0;
+    context[i]->most_mem_allocated = 0;
     context[i]->cuda_context = NULL;
     context[i]->call_tuner = cuzmem_tuner_exhaust;
 

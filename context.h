@@ -42,8 +42,10 @@ struct cuzmem_context_instance
     cuzmem_plan *plan;
     unsigned long start_time;
     unsigned long best_time;
-    unsigned int best_plan;
+    unsigned long long best_plan;
     unsigned int gpu_mem_percent;
+    size_t allocated_mem;       // only valid 0th cycle tune
+    size_t most_mem_allocated;
     CUcontext cuda_context;
     cuzmem_plan* (*call_tuner)(enum cuzmem_tuner_action, void*);
 };

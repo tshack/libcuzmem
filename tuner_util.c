@@ -123,15 +123,9 @@ zeroth_lookup_handler (CUZMEM_CONTEXT ctx, size_t size)
 
             ret = alloc_mem (entry, size);
             if (ret != CUDA_SUCCESS) {
-
-                // out of gpu global memory: move to pinned CPU
-                entry->loc = 0;
-                ret = alloc_mem (entry, size);
-                if (ret != CUDA_SUCCESS) {
-                    // not enough CPU memory: return failure
-                    free (entry);
-                    entry = NULL;
-                }
+                // not enough CPU memory: return failure
+                free (entry);
+                entry = NULL;
             }
 
             // Insert successful entry into plan draft
@@ -263,3 +257,12 @@ max_iteration_handler (CUZMEM_CONTEXT ctx)
         write_plan (ctx->plan, ctx->project_name, ctx->plan_name);
     }
 }
+
+// NOTES:
+// For the 0th iteration.
+// Upon every cudaFree(), before freeing check the overall size of allocated
+// memory.  If it is the biggest ever seen, mark every entry with a non-NULL
+// gpu_pointer as a biggest_alloc_member.
+//
+// This way, plan generators will be able to impose an accurate min GPU memory
+// utilization constraint on plans.
