@@ -239,3 +239,27 @@ loopy_entry_handler (cuzmem_plan* entry, size_t size)
     }
 }
 
+
+// to be called within CUZMEM_TUNER_END
+// stops tuning process if maximum # of tuning
+// iterations have been reached.  Writes out best
+// plan discovered during search.
+void
+max_iteration_handler (CUZMEM_CONTEXT ctx)
+{
+    // have we hit the max # of allowed iterations?
+    if (ctx->tune_iter >= ctx->tune_iter_max) {
+        cuzmem_plan* entry = ctx->plan;
+
+        // if so, stop iterating
+        printf ("libcuzmem: auto-tuning complete.\n");
+        ctx->op_mode = CUZMEM_RUN;
+
+        // ...and write out the best plan
+        while (entry != NULL) {
+            entry->loc = (ctx->best_plan >> entry->id) & 0x0001;
+            entry = entry->next;
+        }
+        write_plan (ctx->plan, ctx->project_name, ctx->plan_name);
+    }
+}
