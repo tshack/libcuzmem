@@ -60,67 +60,43 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         size_t size = *(size_t*)(parm);
 
         CUresult ret;
-        int is_inloop = 0;
+        int loopy = 0;
         cuzmem_plan* entry = NULL;
 
+        // default 0th tuning iteration handling
         if (ctx->tune_iter == 0) {
             return zeroth_lookup_handler (ctx, size);
-        } else {
-            // 1st try to detect if this allocation is an inloop entry.
-            entry = ctx->plan;
-            is_inloop = check_inloop (&entry, size);
-
-            // If this is the inloop's 1st hit for this tuning cycle,
-            // treat it just like any other allocation.  Otherwise,
-            // we simply allocate it just as we did earlier in the tuning
-            // cycle (and we also don't increment current_knob).
-            if (is_inloop && !entry->first_hit) {
-                ret = alloc_mem (entry, size);
-                if (ret != CUDA_SUCCESS) {
-                    // Note, cudaMalloc() will report a NULL return value
-                    // from call_tuner(LOOKUP) as cudaErrorMemoryAllocation
-                    // This should never happen!
-                    entry = NULL;
-                } else {
-                    return entry;
-                }
-            } else {
-                entry = ctx->plan;
-                while (entry != NULL) {
-                    if (entry->id == ctx->current_knob) {
-                        break;
-                    }
-                    entry = entry->next;
-                }
-
-                // if this is an inloop entry and it made it to
-                // here, then this is a 1st hit for this tuning cycle
-                if (entry->inloop == 1) {
-                    entry->first_hit = 0;
-                }
-
-                entry->loc = (ctx->tune_iter >> ctx->current_knob) & 0x0001;
-
-                ret = alloc_mem (entry, size);
-                if (ret != CUDA_SUCCESS) {
-                    // This plan was bad.
-                    // We will move this allocation just to finish the tuning
-                    // cycle.  We also invalidate this plan.
-                    entry->loc ^= 0x0001;
-
-                    ret = alloc_mem (entry, size);
-                    if (ret != CUDA_SUCCESS) {
-                        // not enough CPU memory: return failure
-                        free (entry);
-                        entry = NULL;
-                    }
-
-                    // add large value to timer to invalidate this plan 
-                    ctx->start_time -= (0.50*ctx->start_time);
-                }
-                ctx->current_knob++;
-            }
         }
+
+        // handle looping allocations & get current entry
+        if (loopy_entry (ctx, &entry, size)) {
+            return loopy_entry_handler (entry, size);
+        }
+
+        // exhaustive tuning
+        // ---------------------------------------------------------------------
+        entry->loc = (ctx->tune_iter >> ctx->current_knob) & 0x0001;
+
+        ret = alloc_mem (entry, size);
+        if (ret != CUDA_SUCCESS) {
+            // This plan was bad.
+            // We will move this allocation just to finish the tuning
+            // cycle.  We also invalidate this plan.
+            entry->loc ^= 0x0001;
+
+            ret = alloc_mem (entry, size);
+            if (ret != CUDA_SUCCESS) {
+                // not enough CPU memory: return failure
+                free (entry);
+                entry = NULL;
+            }
+
+            // add large value to timer to invalidate this plan 
+            ctx->start_time -= (0.50*ctx->start_time);
+        }
+        // ---------------------------------------------------------------------
+
+        ctx->current_knob++;
 
         return entry;
     }

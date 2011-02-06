@@ -68,6 +68,24 @@ check_inloop (cuzmem_plan** entry, size_t size)
     return 0;
 }
 
+// finds entry in plan for the current knob
+// Returns:
+//   0 if found
+//   1 if not found
+unsigned int
+find_current_entry (CUZMEM_CONTEXT ctx, cuzmem_plan** entry)
+{
+    *entry = ctx->plan;
+    while (*entry != NULL) {
+        if ((*entry)->id == ctx->current_knob) {
+            return 0;
+        }
+        *entry = (*entry)->next;
+    }
+
+    return 1;
+}
+
 // standard 0th iteration logic
 // * powers through the first iteration by whatever means necessary
 // * attempts to detect "loopy" allocations
@@ -122,3 +140,57 @@ zeroth_lookup_handler (CUZMEM_CONTEXT ctx, size_t size)
         return entry;
     }
 }
+
+
+// Is the entry loopy?
+// * if YES: two things can happen
+//     -- 1) first_hit is TRUE, we check to make sure we have the
+//           correct entry by searching for current_knob & then
+//           we toggle first_hit and return FALSE
+//     -- 2) first_hit is FALSE, we return TRUE
+// * if NO: get current entry and return FALSE
+unsigned int
+loopy_entry (CUZMEM_CONTEXT ctx, cuzmem_plan** entry, size_t size)
+{
+    *entry = ctx->plan;
+    unsigned int loopy = check_inloop (entry, size);
+
+    if (loopy) {
+        if ((*entry)->first_hit == 1) {
+            // first_hit is TRUE, make sure we are
+            // looking at the correct entry.
+            find_current_entry (ctx, entry);
+
+            // is this entry known to be loopy?
+            if ((*entry)->inloop) {
+                (*entry)->first_hit = 0;
+                return 0;
+            } else {
+                fprintf (stderr, "libcuzmem: critical loopy detection error\n");
+            }
+        } else {
+            // first_hit is FALSE
+            return 1;
+        }
+    } else {
+        find_current_entry (ctx, entry);
+        return 0;
+    }
+}
+
+
+// this handles loopy allocations that are on their 2nd+ hit
+cuzmem_plan*
+loopy_entry_handler (cuzmem_plan* entry, size_t size)
+{
+    CUresult ret;
+    ret = alloc_mem (entry, size);
+    if (ret != CUDA_SUCCESS) {
+        // error, return null
+        return NULL;
+    } else {
+        // success
+        return entry;
+    }
+}
+
