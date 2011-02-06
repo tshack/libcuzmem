@@ -39,6 +39,9 @@ cuzmem_plan*
 zeroth_lookup_handler (CUZMEM_CONTEXT ctx, size_t size);
 
 unsigned int
+zeroth_end_handler (CUZMEM_CONTEXT ctx);
+
+unsigned int
 loopy_entry (CUZMEM_CONTEXT ctx, cuzmem_plan** entry, size_t size);
 
 cuzmem_plan*

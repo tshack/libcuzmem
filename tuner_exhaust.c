@@ -22,10 +22,6 @@
 #include "tuner_util.h"
 #include "tuner_exhaust.h"
 
-#define WORD_SIZE 8
-
-
-
 //------------------------------------------------------------------------------
 // TUNER INTERFACE
 //------------------------------------------------------------------------------
@@ -117,34 +113,14 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         // TUNE ITERATION ZERO
         //------------------------------------------------------------
         if (ctx->tune_iter == 0) {
-
-            // check all entries for pinned host memory usage
-            entry = ctx->plan;
-            while (entry != NULL) {
-                if (entry->loc != 1) {
-                    all_global = 0;
-                    break;
-                }
-                entry = entry->next;
-            }
-
-            // quit now if everything fits in gpu memory
-            if (all_global) {
-                printf ("libcuzmem: auto-tuning complete.\n");
-                ctx->op_mode = CUZMEM_RUN;
-                write_plan (ctx->plan, ctx->project_name, ctx->plan_name);
+            if (zeroth_end_handler (ctx)) {
+                // everything fits in GPU memory, returning ends search
                 return NULL;
             }
 
-            // if everything didn't fit, size up the search space
-            ctx->num_knobs = ctx->current_knob + 1;
-
-            if (ctx->num_knobs <= sizeof(unsigned long long) * WORD_SIZE) {
-                ctx->tune_iter_max = (unsigned long long)pow (2, ctx->num_knobs);
-            } else {
-                fprintf (stderr, "libcuzmem: allocation symbol limit exceeded!\n");
-                exit(0);
-            }
+            // exhaustive search specific: compute # of tune iterations
+            ctx->tune_iter_max = (unsigned long long)pow (2, ctx->num_knobs);
+            return NULL;
         }
 
         //------------------------------------------------------------

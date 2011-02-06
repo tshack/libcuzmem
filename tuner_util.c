@@ -17,8 +17,12 @@
 
 #include <cuda.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "context.h"
 #include "plans.h"
+
+// TODO: should be CMake generated
+#define WORD_SIZE 8
 
 // returns number of bits required to express n combinations
 unsigned int
@@ -141,6 +145,47 @@ zeroth_lookup_handler (CUZMEM_CONTEXT ctx, size_t size)
     }
 }
 
+// standard 0th iteration logic
+// * checks if cpu-pinned memory is necessary at all
+// * if pinned memory is necessary, saves num_knobs (full search space)
+// returns:
+//   1 if everything fits in GPU global memory
+//   0 if we must continue searching
+unsigned int
+zeroth_end_handler (CUZMEM_CONTEXT ctx)
+{
+    if (ctx->tune_iter == 0) {
+        unsigned int all_global = 1;
+        cuzmem_plan* entry = ctx->plan;
+
+        // check all entries for pinned host memory usage
+        while (entry != NULL) {
+            if (entry->loc != 1) {
+                all_global = 0;
+                break;
+            }
+            entry = entry->next;
+        }
+
+        // quit now if everything fits in gpu memory
+        if (all_global) {
+            printf ("libcuzmem: auto-tuning complete.\n");
+            ctx->op_mode = CUZMEM_RUN;
+            write_plan (ctx->plan, ctx->project_name, ctx->plan_name);
+            return 1;
+        }
+
+        // if everything didn't fit, size up the search space
+        ctx->num_knobs = ctx->current_knob + 1;
+
+        if (ctx->num_knobs > sizeof(unsigned long long) * WORD_SIZE) {
+            fprintf (stderr, "libcuzmem: allocation symbol limit exceeded!\n");
+            exit(0);
+        }
+
+        return 0;
+    }
+}
 
 // Is the entry loopy?
 // * if YES: two things can happen
