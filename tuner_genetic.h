@@ -15,40 +15,27 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _tuner_util_h_
-#define _tuner_util_h_
+#ifndef _tuner_genetic_h_
+#define _tuner_genetic_h_
 
+#include "libcuzmem.h"
 #include "plans.h"
 
+// -- Genetic Candidate Structure ----------------
+typedef struct candidate_struct candidate;
+struct candidate_struct
+{
+    unsigned long long DNA;  // bit pattern
+    double fit;              // fitness
+};
+// -----------------------------------------------
 
 #if defined __cplusplus
 extern "C" {
 #endif
 
-unsigned int
-num_bits (unsigned long long n);
-
-unsigned int
-detect_inloop (cuzmem_plan** entry, size_t size);
-
-unsigned int
-check_inloop (cuzmem_plan** entry, size_t size);
-
-// standard tuner handlers
 cuzmem_plan*
-zeroth_lookup_handler (CUZMEM_CONTEXT ctx, size_t size);
-
-unsigned int
-zeroth_end_handler (CUZMEM_CONTEXT ctx);
-
-unsigned int
-loopy_entry (CUZMEM_CONTEXT ctx, cuzmem_plan** entry, size_t size);
-
-cuzmem_plan*
-loopy_entry_handler (cuzmem_plan* entry, size_t size);
-
-const char*
-binary (unsigned long long x);
+cuzmem_tuner_genetic (enum cuzmem_tuner_action action, void* parm);
 
 #if defined __cplusplus
 };

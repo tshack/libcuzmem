@@ -24,13 +24,13 @@
 #include <sys/types.h>
 #include "context.h"
 #include "tuner_exhaust.h"
+#include "tuner_genetic.h"
 
 //------------------------------------------------------------------------------
 // CUZMEM CONTEXT STATE
 //------------------------------------------------------------------------------
 cuzmem_context* context[MAX_CONTEXTS] = { NULL };
 pid_t context_lut[MAX_CONTEXTS] = { 0 };
-void* ___tuner_state[MAX_CONTEXTS] = { NULL };
 
 //------------------------------------------------------------------------------
 // CUZMEM CONTEXT MANAGEMENT FUNCTIONS
@@ -69,7 +69,8 @@ create_context ()
     context[i]->allocated_mem = 0;
     context[i]->most_mem_allocated = 0;
     context[i]->cuda_context = NULL;
-    context[i]->call_tuner = cuzmem_tuner_exhaust;
+    context[i]->tuner_state = NULL;
+    context[i]->call_tuner = cuzmem_tuner_genetic;
 
     return context[i];
 }

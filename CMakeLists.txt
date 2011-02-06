@@ -38,6 +38,7 @@ SET ( SRC_LIBCUZMEM
     plans.c
     tuner_util.c
     tuner_exhaust.c
+    tuner_genetic.c
 )
 
 SET ( SRC_TEST

@@ -18,11 +18,25 @@
 #include <cuda.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <limits.h>
 #include "context.h"
 #include "plans.h"
 
 // TODO: should be CMake generated
 #define WORD_SIZE 8
+
+// returns a bit mask of n contiguous bits
+unsigned long long
+generate_mask (unsigned int n)
+{
+    unsigned long long tmp = ULLONG_MAX;
+
+    tmp = tmp << (64 - n);
+    tmp = tmp >> (64 - n);
+
+    return tmp;
+}
 
 // returns number of bits required to express n combinations
 unsigned int
@@ -255,14 +269,24 @@ max_iteration_handler (CUZMEM_CONTEXT ctx)
             entry = entry->next;
         }
         write_plan (ctx->plan, ctx->project_name, ctx->plan_name);
+    } else {
+        // not finished, so get ready for next tuning iteration
+        ctx->current_knob = 0;
     }
+
 }
 
-// NOTES:
-// For the 0th iteration.
-// Upon every cudaFree(), before freeing check the overall size of allocated
-// memory.  If it is the biggest ever seen, mark every entry with a non-NULL
-// gpu_pointer as a biggest_alloc_member.
-//
-// This way, plan generators will be able to impose an accurate min GPU memory
-// utilization constraint on plans.
+// printf ("%s", binary(n));
+const char*
+binary (unsigned long long x)
+{
+    static char b[9];
+    b[0] = '\0';
+
+    unsigned long long z;
+    for (z = 0x8000000000000000; z > 0; z >>= 1) {
+        strcat(b, ((x & z) == z) ? "1" : "0");
+    }
+
+    return b;
+}
