@@ -35,12 +35,12 @@ struct cuzmem_context_instance
     char plan_name[MAX_CONTEXTS];
     char project_name[MAX_CONTEXTS];
     unsigned int tune_iter;
-    unsigned int num_knobs;
+    unsigned long long num_knobs;
     unsigned long long current_knob;
     unsigned long long tune_iter_max;
     enum cuzmem_op_mode op_mode;
     cuzmem_plan *plan;
-    unsigned long start_time;
+    double start_time;
     unsigned long best_time;
     unsigned long long best_plan;
     unsigned int gpu_mem_percent;
@@ -48,6 +48,7 @@ struct cuzmem_context_instance
     size_t most_mem_allocated;
     CUcontext cuda_context;
     cuzmem_plan* (*call_tuner)(enum cuzmem_tuner_action, void*);
+    void* tuner_state;
 };
 typedef cuzmem_context* CUZMEM_CONTEXT;
 // -----------------------------------------------
@@ -57,15 +58,6 @@ extern cuzmem_context* context[];
 extern pid_t context_lut[];
 // -----------------------------------------------
 
-// -- Context Persistent State Handler -----------
-#define SAVE_STATE(state_ptr)                             \
-    ___tuner_state[get_context_id()] = (void*)state_ptr    
-
-#define RESTORE_STATE(state_ptr)                          \
-    state_ptr = ___tuner_state[get_context_id()]     
-
-extern void* ___tuner_state[];
-// -----------------------------------------------
 
 
 #if defined __cplusplus
