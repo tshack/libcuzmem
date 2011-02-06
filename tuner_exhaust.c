@@ -109,9 +109,8 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
         unsigned int gpu_mem_min;
         CUresult ret;
 
-        //------------------------------------------------------------
-        // TUNE ITERATION ZERO
-        //------------------------------------------------------------
+        // standard tuner structure
+        // ---------------------------------------------------------------------
         if (ctx->tune_iter == 0) {
             if (zeroth_end_handler (ctx)) {
                 // everything fits in GPU memory, returning ends search
@@ -120,24 +119,21 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
 
             // exhaustive search specific: compute # of tune iterations
             ctx->tune_iter_max = (unsigned long long)pow (2, ctx->num_knobs);
-            return NULL;
         }
 
-        //------------------------------------------------------------
-        // ALL TUNE ITERATIONS
-        //------------------------------------------------------------
         // get the time to complete this iteration
         time = get_time() - ctx->start_time;
 
         if (time < ctx->best_time) {
             ctx->best_time = time;
-            ctx->best_plan = ctx->tune_iter;
+            ctx->best_plan = ctx->tune_iter;    // algorithm dependent
         }
-
-        printf ("libcuzmem: best plan is #%i of %i\n", ctx->best_plan, ctx->tune_iter_max);
 
         // reset current knob for next tune iteration
         ctx->current_knob = 0;
+        // ---------------------------------------------------------------------
+
+        printf ("libcuzmem: best plan is #%i of %i\n", ctx->best_plan, ctx->tune_iter_max);
 
         // pull down GPU global memory usage from CUDA driver
         ret = cuMemGetInfo (&gpu_mem_free, &gpu_mem_total);
@@ -145,20 +141,8 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
             fprintf (stderr, "libcuzmem: could not retrieve GPU memory info from CUDA Driver!\n");
             exit (1);
         } else {
-            // NOTE: cuMemGetInfo /seems/ to be over reporting free memory.
-            //       *Perhaps* it is not counting memory allocated to the framebuffer
-            //       or there is some built in limit for overhead or something.
-            //       I just had an 149587200 byte allocation fail with
-            //       CUerror = 2 (out of mem) when cuMemGetInfo reported
-            //       164347904 bytes available!
-            //
-            //       So, I will say that 20MB must remain free.
             gpu_mem_min = (unsigned int)((float)gpu_mem_free * (float)ctx->gpu_mem_percent * 0.01f);
             gpu_mem_free -= 20000000;
-            fprintf (stderr, "  Free   GPU Memory: %i\n", gpu_mem_free);
-            fprintf (stderr, "  Total  GPU Memory: %i\n", gpu_mem_total);
-            fprintf (stderr, "  Specified Percent: %i\n", ctx->gpu_mem_percent);
-            fprintf (stderr, "  Specified Minimum: %i\n", gpu_mem_min);
         }
 
         // check to make sure the next iteration's plan draft meets the GPU
@@ -198,22 +182,10 @@ cuzmem_tuner_exhaust (enum cuzmem_tuner_action action, void* parm)
             }
         } while (!satisfied);
 
-        // have we exhausted the search space?
-        if (ctx->tune_iter >= ctx->tune_iter_max) {
-            // if so, stop iterating
-            printf ("libcuzmem: auto-tuning complete.\n");
-            ctx->op_mode = CUZMEM_RUN;
 
-            // ...and write out the best plan
-            entry = ctx->plan;
-            while (entry != NULL) {
-                entry->loc = (ctx->best_plan >> entry->id) & 0x0001;
-                entry = entry->next;
-            }
-            write_plan (ctx->plan, ctx->project_name, ctx->plan_name);
-        }
 
-        // return value currently has no meaning
+        // always end with this
+        max_iteration_handler (ctx);
         return NULL;
     }
     // =========================================================================
