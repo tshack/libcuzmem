@@ -20,6 +20,7 @@
 #include <string.h>
 #include <limits.h>
 #include <cuda.h>
+#include <driver_types.h>
 #include <sys/time.h>
 #include <sys/types.h>
 
@@ -31,8 +32,8 @@
 #define DEBUG
 
 // some non-API function declarations I wanted to keep out of libcuzmem.h
-extern "C" CUresult alloc_mem (cuzmem_plan* entry, size_t size);
-extern "C" double get_time();
+CUresult alloc_mem (cuzmem_plan* entry, size_t size);
+double get_time();
 
 //------------------------------------------------------------------------------
 // CUDA RUNTIME REPLACEMENTS
@@ -350,7 +351,7 @@ cuzmem_start (enum cuzmem_op_mode m, CUdevice cuda_dev)
 
 
 // Called at end of each plan invocation
-cuzmem_op_mode
+enum cuzmem_op_mode
 cuzmem_end ()
 {
     CUZMEM_CONTEXT ctx = get_context();
