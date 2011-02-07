@@ -284,7 +284,6 @@ cuzmem_tuner_genetic (enum cuzmem_tuner_action action, void* parm)
 
             // genetic search specific: compute # of tune iterations
             ctx->tune_iter_max = (unsigned long long)(GENERATIONS * POPULATION);
-            printf ("MAX ITERATIONS = %llu\n", ctx->tune_iter_max);
 
             max_iteration_handler (ctx);
             return NULL;
