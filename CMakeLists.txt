@@ -33,7 +33,7 @@ ENDIF (CUDA_FOUND)
 
 ## BUILD TARGET SOURCE FILES ###########################
 SET ( SRC_LIBCUZMEM
-    libcuzmem.cu
+    libcuzmem.c
     context.c
     plans.c
     tuner_util.c
