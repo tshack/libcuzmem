@@ -26,8 +26,9 @@ IF (CUDA_FOUND)
         ${CMAKE_CURRENT_SOURCE_DIR}
     )
 
-    # Don't link against CUDA runtime
-    SET (CUDA_LIBRARIES "")
+    # Don't link against CUDA Runtime, only libcuda.so.1
+    SET (CUDA_LIBRARIES ${CUDA_CUDA_LIBRARY})
+    MESSAGE(STATUS "${CUDA_LIBRARIES}")
 ENDIF (CUDA_FOUND)
 
 
@@ -41,11 +42,11 @@ SET ( SRC_LIBCUZMEM
     tuner_genetic.c
 )
 
-SET ( SRC_TEST
-    test.c
-    plans.c
-    context.c
-)
+#SET ( SRC_TEST
+#    test.c
+#    plans.c
+#    context.c
+#)
 
 ########################################################
 
@@ -55,9 +56,9 @@ CUDA_ADD_LIBRARY ( cuzmem SHARED
     ${SRC_LIBCUZMEM}
 )
 
-ADD_EXECUTABLE ( test
-    ${SRC_TEST}
-)
+#ADD_EXECUTABLE ( test
+#    ${SRC_TEST}
+#)
 ########################################################
 
 
