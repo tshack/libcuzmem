@@ -19,6 +19,7 @@
 #define _cuzmem_h_
 
 #include <cuda.h>
+#include <driver_types.h>
 #include <dlfcn.h>
 
 // -- Tuning Engine stuff ------------------------
@@ -41,47 +42,61 @@ enum cuzmem_op_mode {
 };
 // -----------------------------------------------
 
+// -- My dlfcn Functions Macro  ------------------
+#define MAKE_CUZMEM_API(f, ...)                  \
+    f (__VA_ARGS__); typedef f##_cuzmem_t(__VA_ARGS__);  
+// -----------------------------------------------
+
 
 // -- Export symbols -----------------------------
 #if defined __cplusplus
 extern "C" {
 #endif
     // Framework symbols
-    void cuzmem_start (enum cuzmem_op_mode m, CUdevice cuda_dev);
-    enum cuzmem_op_mode cuzmem_end ();
+    MAKE_CUZMEM_API (
+        void cuzmem_start,
+            enum cuzmem_op_mode m,
+            CUdevice cuda_dev
+    );
+    MAKE_CUZMEM_API (
+        enum cuzmem_op_mode cuzmem_end,
+            void
+    );
+
     // User symbols
-    void cuzmem_set_project (char* project);
-    void cuzmem_set_plan (char* plan);
-    void cuzmem_set_tuner (enum cuzmem_tuner t);
-//    void cuzmem_plan (int count, ...);
+    MAKE_CUZMEM_API (
+        void cuzmem_set_project,
+            char* project
+    );
+    MAKE_CUZMEM_API (
+        void cuzmem_set_plan,
+            char* plan
+    );
+    MAKE_CUZMEM_API (
+        void cuzmem_set_tuner,
+            enum cuzmem_tuner t
+    );
 #if defined __cplusplus
 };
 #endif
 // -----------------------------------------------
 
+typedef cudaError_t cudaMalloc_cuzmem_t(void**, size_t);
+typedef cudaError_t cudaFree_cuzmem_t(void*);
 
 // -- Some fairly nasty Framework Macros ---------
 #define CUZMEM_LOAD_SYMBOL(sym, lib)                                   \
-    *(void **)(&sym) = dlsym (lib, #sym);                               
+    sym##_cuzmem_t *sym = (sym##_cuzmem_t*) dlsym (lib, #sym);          
 
 
 #define CUZMEM_HOOK_CUDA_MALLOC                                        \
-    cudaError_t (*cudaMalloc)(void**, size_t);                         \
-    cudaError_t (*cudaFree)(void*);                                    \
-                                                                       \
     void* libcuzmem = dlopen ("./libcuzmem.so", RTLD_LAZY);            \
     if (!libcuzmem) { printf ("Error Loading libcuzmem\n"); exit(1); } \
-    *(void **)(&cudaMalloc) = dlsym (libcuzmem, "cudaMalloc");         \
-    *(void **)(&cudaFree)   = dlsym (libcuzmem, "cudaFree");            
+    CUZMEM_LOAD_SYMBOL (cudaMalloc, libcuzmem);                        \
+    CUZMEM_LOAD_SYMBOL (cudaFree, libcuzmem);                           
 
 
 #define CUZMEM_BENCH_INIT                                              \
-    void (*cuzmem_start)(enum cuzmem_op_mode, CUdevice);               \
-    enum cuzmem_op_mode (*cuzmem_end)();                               \
-    void (*cuzmem_set_project)(char*);                                 \
-    void (*cuzmem_set_plan)(char*);                                    \
-    void (*cuzmem_set_tuner)(enum cuzmem_tuner);                       \
-                                                                       \
     void* libcuzmem = dlopen ("./libcuzmem.so", RTLD_LAZY);            \
     if (!libcuzmem) { printf ("Error Loading libcuzmem\n"); exit(1); } \
     CUZMEM_LOAD_SYMBOL (cuzmem_start, libcuzmem);                      \
