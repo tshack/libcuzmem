@@ -54,6 +54,9 @@ read_plan (char *project_name, char *plan_name);
 void
 write_plan (cuzmem_plan* plan, char *project_name, char *plan_name);
 
+int
+check_plan (const char* project_name, const char* plan_name);
+
 #if defined __cplusplus
 };
 #endif

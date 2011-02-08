@@ -416,6 +416,13 @@ cuzmem_set_tuner (enum cuzmem_tuner t)
     }
 }
 
+// Used to see if a specific plan exists for a given project
+int
+cuzmem_check_plan (const char* project, const char* plan)
+{
+    return check_plan (project, plan);
+}
+
 // Used to set the mimimum GPU global memory utilization
 // a plan must satisfy in order to be accepted
 void

@@ -73,6 +73,11 @@ extern "C" {
             char* plan
     );
     MAKE_CUZMEM_API (
+        int cuzmem_check_plan,
+            const char* project,
+            const char* plan
+    );
+    MAKE_CUZMEM_API (
         void cuzmem_set_tuner,
             enum cuzmem_tuner t
     );
@@ -89,21 +94,22 @@ typedef cudaError_t cudaFree_cuzmem_t(void*);
     sym##_cuzmem_t *sym = (sym##_cuzmem_t*) dlsym (lib, #sym);          
 
 
-#define CUZMEM_HOOK_CUDA_MALLOC                                        \
+#define CUZMEM_HOOK                                                    \
     void* libcuzmem = dlopen ("./libcuzmem.so", RTLD_LAZY);            \
     if (!libcuzmem) { printf ("Error Loading libcuzmem\n"); exit(1); } \
     CUZMEM_LOAD_SYMBOL (cudaMalloc, libcuzmem);                        \
     CUZMEM_LOAD_SYMBOL (cudaFree, libcuzmem);                           
 
 
-#define CUZMEM_BENCH_INIT                                              \
+#define CUZMEM_INIT                                                    \
     void* libcuzmem = dlopen ("./libcuzmem.so", RTLD_LAZY);            \
     if (!libcuzmem) { printf ("Error Loading libcuzmem\n"); exit(1); } \
     CUZMEM_LOAD_SYMBOL (cuzmem_start, libcuzmem);                      \
     CUZMEM_LOAD_SYMBOL (cuzmem_end, libcuzmem);                        \
     CUZMEM_LOAD_SYMBOL (cuzmem_set_project, libcuzmem);                \
     CUZMEM_LOAD_SYMBOL (cuzmem_set_plan, libcuzmem);                   \
-    CUZMEM_LOAD_SYMBOL (cuzmem_set_tuner, libcuzmem);                   
+    CUZMEM_LOAD_SYMBOL (cuzmem_set_tuner, libcuzmem);                  \
+    CUZMEM_LOAD_SYMBOL (cuzmem_check_plan, libcuzmem);                  
 
 
 #define CUZMEM_START(mode,gpu_id)   cuzmem_start_label: cuzmem_start(mode,gpu_id) ;
