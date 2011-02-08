@@ -150,15 +150,7 @@ read_plan (char *project_name, char *plan_name)
     int line_len;
     cuzmem_plan *plan = NULL;
 
-    strcpy (filename, "");
-
-    home = getenv ("HOME");
-    strcat (filename, home);
-    strcat (filename, "/.");
-    strcat (filename, project_name);
-    strcat (filename, "/");
-    strcat (filename, plan_name);
-    strcat (filename, ".plan");
+    sprintf (filename, "%s/.%s/%s.plan", getenv ("HOME"), project_name, plan_name);
 
     // open the file
     fp = fopen (filename, "r");
@@ -283,3 +275,19 @@ write_plan (cuzmem_plan* plan, char *project_name, char *plan_name)
     fclose (fp);
 }
 
+int
+check_plan (const char* project_name, const char* plan_name)
+{
+    struct stat st;
+    char filename[FILENAME_MAX];
+
+    sprintf (filename, "%s/.%s/%s.plan", getenv ("HOME"), project_name, plan_name);
+
+    if (stat (filename, &st) != 0) {
+        // plan does not exist
+        return 1;
+    } else {
+        // plan does exist
+        return 0;
+    }
+}
