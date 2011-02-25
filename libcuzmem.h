@@ -30,8 +30,9 @@ enum cuzmem_tuner_action {
 };
 
 enum cuzmem_tuner {
-    CUZMEM_EXHAUSTIVE,
-    CUZMEM_GENETIC
+    CUZMEM_NOTUNE,
+    CUZMEM_GENETIC,
+    CUZMEM_EXHAUSTIVE
 };
 // -----------------------------------------------
 
