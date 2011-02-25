@@ -30,7 +30,7 @@
 #include "tuner_exhaust.h"
 #include "tuner_genetic.h"
 
-#define DEBUG
+//#define DEBUG
 
 // some non-API function declarations I wanted to keep out of libcuzmem.h
 CUresult alloc_mem (cuzmem_plan* entry, size_t size);
