@@ -24,6 +24,18 @@
 #include "libcuzmem.h"
 #include "plans.h"
 
+void
+make_directory (const char* filename)
+{
+    if (mkdir (filename, 0755)) {
+        fprintf (stderr, "libcuzmem: could not create project directory!\n");
+        fprintf (stderr, "  (%s)\n", filename);
+        exit (1);
+    }
+}
+
+
+
 size_t
 rm_whitespace (char *str)
 {
@@ -204,6 +216,8 @@ write_plan (cuzmem_plan* plan, char *project_name, char *plan_name)
     FILE *fp;
     char *home;
     char filename[FILENAME_MAX];
+    char dirname[FILENAME_MAX];
+    char *dir_ptr;
     unsigned int i;
 
     struct stat st;
@@ -216,14 +230,27 @@ write_plan (cuzmem_plan* plan, char *project_name, char *plan_name)
     home = getenv ("HOME");
     strcat (filename, home);
     strcat (filename, "/.");
+    
+    // address of forward slash we just strcat()ted in
+    dir_ptr = &filename[strlen(filename)-2];
+
+    // full desired project path
     strcat (filename, project_name);
 
     // .project does not exist (create it)
-    if (stat (filename, &st) != 0) {
-        if (mkdir (filename, 0755)) {
-            fprintf (stderr, "libcuzmem: could not create project directory!\n");
-            fprintf (stderr, "  (%s)\n", filename);
-            exit (1);
+    while (stat (filename, &st) != 0) {
+        // .project could be .project/dir1/dir2/etc/
+        dir_ptr = strchr (dir_ptr+1, '/');
+        if (dir_ptr == NULL) {
+            // for when trailing slash is missing
+            make_directory (filename);
+        } else {
+            strncpy (dirname, filename, dir_ptr - filename);
+            dirname[dir_ptr - filename] = '\0';
+            // does this sub directory already exist?
+            if (stat (dirname, &st) != 0) {
+                make_directory (dirname);
+            }
         }
     }
 
