@@ -40,6 +40,7 @@ SET ( SRC_LIBCUZMEM
     tuner_util.c
     tuner_exhaust.c
     tuner_genetic.c
+    tuner_notune.c
 )
 
 #SET ( SRC_TEST

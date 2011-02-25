@@ -29,6 +29,7 @@
 #include "plans.h"
 #include "tuner_exhaust.h"
 #include "tuner_genetic.h"
+#include "tuner_notune.h"
 
 //#define DEBUG
 
@@ -411,6 +412,9 @@ cuzmem_set_tuner (enum cuzmem_tuner t)
 
     switch (t)
     {
+    case CUZMEM_NOTUNE:
+        ctx->call_tuner = cuzmem_tuner_notune;
+        break;
     case CUZMEM_EXHAUSTIVE:
         ctx->call_tuner = cuzmem_tuner_exhaust;
         break;
