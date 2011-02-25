@@ -73,6 +73,8 @@ cuzmem_tuner_notune (enum cuzmem_tuner_action action, void* parm)
     // =========================================================================
     else if (CUZMEM_TUNER_END == action) {
 
+        ctx->op_mode = CUZMEM_RUN;
+
         return NULL;
 
     }
