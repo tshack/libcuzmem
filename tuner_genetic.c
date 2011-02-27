@@ -30,7 +30,7 @@
 #define ELITE       0.25f
 //-------------------------------------------
 
-#define DEBUG
+//#define DEBUG
 
 // -- State Macros -----------------------
 #define SAVE_STATE(state_ptr)            \
