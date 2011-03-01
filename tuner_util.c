@@ -23,6 +23,8 @@
 #include "context.h"
 #include "plans.h"
 
+//#define DEBUG
+
 // TODO: should be CMake generated
 #define WORD_SIZE 8
 
@@ -177,7 +179,9 @@ zeroth_end_handler (CUZMEM_CONTEXT ctx)
 
         // quit now if everything fits in gpu memory
         if (all_global) {
+#if defined (DEBUG)
             printf ("libcuzmem: auto-tuning complete.\n");
+#endif
             ctx->op_mode = CUZMEM_RUN;
             write_plan (ctx->plan, ctx->project_name, ctx->plan_name);
             return 1;
@@ -260,7 +264,9 @@ max_iteration_handler (CUZMEM_CONTEXT ctx)
         cuzmem_plan* entry = ctx->plan;
 
         // if so, stop iterating
+#if defined (DEBUG)
         printf ("libcuzmem: auto-tuning complete.\n");
+#endif
         ctx->op_mode = CUZMEM_RUN;
 
         // ...and write out the best plan
