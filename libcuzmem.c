@@ -57,7 +57,10 @@ cudaMalloc (void **devPtr, size_t size)
 
         // 2) Lookup malloc type for this knob & allocate
         while (entry != NULL) {
-            if (entry->id == ctx->current_knob) {
+            if (entry->id == ctx->current_knob &&
+                entry->size == size
+                )
+            {
                 ret = alloc_mem (entry, size);
                 *devPtr = entry->gpu_pointer;
                 break;
@@ -65,7 +68,15 @@ cudaMalloc (void **devPtr, size_t size)
             entry = entry->next;
         }
 
-        // Knob id exceeds those found in plan... must be in a malloc/free loop
+        // If we enter this loop, either:
+        //  1) ctx->current_knob exceeded the maximum entry ID in the plan
+        //  2) ctx->current_knob is less than the maximum entry ID, but the
+        //     size requested by current_knob does not match the size in the
+        //     entry with the same ID
+        // Both of these situations indicate that the allocation must be
+        // associated with a previous entry... so we search through previous
+        // entries marked as inloop for one that is the correct size and
+        // currently unallocated.
         if (*devPtr == NULL) {
             // Look for a free()ed "inloop" marked plan entry 
             entry = ctx->plan;
