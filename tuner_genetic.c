@@ -28,6 +28,7 @@
 #define GENERATIONS 10
 #define POPULATION  20
 #define ELITE       0.25f
+#define MUTATION    0.25f
 //-------------------------------------------
 
 //#define DEBUG
@@ -161,7 +162,7 @@ cuzmem_tuner_genetic (enum cuzmem_tuner_action action, void* parm)
             // time to breed the next generation
             else {
                 int i,mom,dad;
-                unsigned long long mix,mix_b;
+                unsigned long long mix, mutant_dna;
                 int num_elite = POPULATION * ELITE;
                 candidate** b = (candidate**) malloc (sizeof(candidate*) * POPULATION);
 
@@ -200,12 +201,20 @@ cuzmem_tuner_genetic (enum cuzmem_tuner_action action, void* parm)
                     mix = mix << 32;
                     mix = mix + rand();
                     mix &= generate_mask(ctx->num_knobs);
-                    mix_b = mix;
 
                     // mate the parents
                     b[i]->DNA = c[mom]->DNA & mix; 
                     mix  = (~mix) & generate_mask(ctx->num_knobs);
                     b[i]->DNA |= c[dad]->DNA & mix;
+
+                    // mutate sometimes so we don't become overly inbread
+                    if (rand() < RAND_MAX * MUTATION) {
+                        mutant_dna = rand();
+                        mutant_dna = mutant_dna << 32;
+                        mutant_dna = mutant_dna + rand();
+                        mutant_dna &= generate_mask(ctx->num_knobs);
+                        b[i]->DNA ^= mutant_dna;
+                    }
                 }
 
                 // make offspring the new generation
