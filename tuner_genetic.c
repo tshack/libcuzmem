@@ -24,14 +24,14 @@
 #include "tuner_genetic.h"
 
 //-------------------------------------------
-#define MIN_GPU_MEM 0.90f
+#define MIN_GPU_MEM 0.50f
 #define GENERATIONS 10
 #define POPULATION  20
 #define ELITE       0.25f
 #define MUTATION    0.25f
 //-------------------------------------------
 
-//#define DEBUG
+#define DEBUG
 
 // -- State Macros -----------------------
 #define SAVE_STATE(state_ptr)            \
@@ -123,6 +123,26 @@ immaculate_conception (CUZMEM_CONTEXT ctx)
     return c;
 }
 
+
+void
+save_trace_candidate (CUZMEM_CONTEXT ctx)
+{
+    cuzmem_plan* entry = ctx->plan;
+
+    candidate** c;
+    RESTORE_STATE (c);
+
+    c[0] = (candidate*)malloc (sizeof(candidate));
+    c[0]->DNA = 0x0;
+    c[0]->fit = get_time() - ctx->start_time;
+    while (entry != NULL) {
+        c[0]->DNA |= (entry->loc & 0x0001) << entry->id;
+        entry = entry->next;
+    }
+
+    SAVE_STATE (c);
+}
+
 //------------------------------------------------------------------------------
 // GENETIC TUNER
 //------------------------------------------------------------------------------
@@ -152,7 +172,8 @@ cuzmem_tuner_genetic (enum cuzmem_tuner_action action, void* parm)
             if (ctx->tune_iter == 1) {
                 int i;
 
-                for (i=0; i<POPULATION; i++) {
+                // c[0] is already populated by the mem trace plan's candidate
+                for (i=1; i<POPULATION; i++) {
                     c[i] = immaculate_conception (ctx);
                 }
 
@@ -293,6 +314,10 @@ cuzmem_tuner_genetic (enum cuzmem_tuner_action action, void* parm)
 
             // genetic search specific: compute # of tune iterations
             ctx->tune_iter_max = (unsigned long long)(GENERATIONS * POPULATION);
+
+            // genetic search specific: put 0th iteration memory trace plan
+            //    into the 1st generation candidate pool
+            save_trace_candidate (ctx);
 
             max_iteration_handler (ctx);
             return NULL;
